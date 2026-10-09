@@ -115,14 +115,20 @@
       for (const f of g.feed) {
         if (f.seenAnn) continue;
         f.seenAnn = true;
-        if (!f.ann) continue;
+        if (!f.ann || typeof f.ann !== 'object') continue;
+        try { this.takeAnn(f, me); } catch (e) { console.warn('[anuncio] se ignoró un aviso con datos raros:', e); }
+      }
+    }
+    takeAnn(f, me) {
+      const g = this.game;
+      {
         const a = M.announceText(f.ann, me, this.byId.bind(this));
         if (f.ann.k === 'kill') {
           this.kills.push({ t: g.time, ann: f.ann, k: a && a.killer, v: a && a.victim, team: f.ann.team, by: f.ann.by, n: f.ann.assists ? f.ann.assists.length : 0 });
           if (this.kills.length > 6) this.kills.shift();
           if (f.ann.victim === me.id) this.lastRecap = f.ann.recap;
         }
-        if (!a) continue;
+        if (!a) return;
         a.prio = f.ann.k === 'kill' && (f.ann.multi >= 2 || f.ann.first) ? 3 : f.ann.k === 'ace' ? 3 : f.ann.killer === me.id || f.ann.victim === me.id ? 2 : 1;
         this.queue.push(a);
         // que no se acumulen: si hay muchos, se descartan los menos importantes
@@ -177,13 +183,14 @@
       if (kf !== this.kfHtml) { $('kill-portraits').innerHTML = kf; this.kfHtml = kf; }
       // marcos de aliados
       const allies = g.champions.filter(function (c) { return c.team === p.team && c !== p; });
-      $('ally-frames').innerHTML = allies.map(function (c) {
+      const afHtml = allies.map(function (c) {
         const hp = U.clamp(c.hp / c.maxHp, 0, 1), mn = c.maxMana ? U.clamp(c.mana / c.maxMana, 0, 1) : 0;
         const rReady = c.ranks && c.ranks[3] > 0 && c.cds && c.cds[3] <= 0;
         return '<div class="ally' + (c.dead ? ' dead' : '') + '" title="' + esc(c.name) + '"><div class="ap" style="border-color:' + M.TEAM_COLORS[c.team] + '"><img src="' + unitIcon(c) + '"><span class="alv">' + c.level + '</span>' +
           (c.dead ? '<span class="ard">' + Math.ceil(c.respawnTimer || 0) + '</span>' : '') + (rReady ? '<span class="ar" title="Definitiva lista">R</span>' : '') + '</div>' +
           '<div class="abars"><div class="ahp" style="width:' + (hp * 100).toFixed(1) + '%;background:' + (M.BAR_COLORS ? M.BAR_COLORS.ally : '#38a3ff') + '"></div><div class="amn" style="width:' + (mn * 100).toFixed(1) + '%"></div></div></div>';
       }).join('');
+      if (afHtml !== this.afHtml) { $('ally-frames').innerHTML = afHtml; this.afHtml = afHtml; }
       // efectos activos sobre tus habilidades
       const mb = buffsHtml(p, false);
       if (mb !== this.mbHtml) { $('my-buffs').innerHTML = mb; this.mbHtml = mb; }
@@ -230,10 +237,10 @@
       if (this.recapShown) return;
       this.recapShown = true;
       const r = this.lastRecap, self = this;
-      const rows = r.rows.map(function (row) {
+      const rows = (Array.isArray(r.rows) ? r.rows : []).map(function (row) {
         const u = row.id ? self.byId(row.id) : null;
         const pct = r.total ? row.total / r.total * 100 : 0;
-        const parts = row.parts.map(function (pt) { return '<div class="rc-part"><span>' + esc(pt.l) + '</span><b style="color:' + (DMG_COL[pt.k] || '#fff') + '">' + pt.a + '</b></div>'; }).join('');
+        const parts = (Array.isArray(row.parts) ? row.parts : []).map(function (pt) { return '<div class="rc-part"><span>' + esc(pt.l) + '</span><b style="color:' + (DMG_COL[pt.k] || '#fff') + '">' + pt.a + '</b></div>'; }).join('');
         return '<div class="rc-row"><img src="' + (u ? unitIcon(u) : unitIcon({ type: 'tower', team: row.team })) + '"><div class="rc-body"><div class="rc-name">' + esc(row.name) +
           '<span>' + row.total + ' (' + Math.round(pct) + '%)</span></div><div class="rc-bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>' + parts + '</div></div>';
       }).join('');

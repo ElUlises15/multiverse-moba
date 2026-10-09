@@ -361,13 +361,22 @@
         const dt = Math.min(0.25, (now - (lastBg || now)) / 1000);
         lastBg = now;
         const g = session.game;
-        if (!g.over) { acc += dt * SPEED; let steps = 0; while (acc >= STEP && steps < 60) { g.update(STEP); acc -= STEP; steps++; } if (steps >= 60) acc = 0; }
-        session.step(dt);
+        guarded('simulación (segundo plano)', function () { if (!g.over) { acc += dt * SPEED; let steps = 0; while (acc >= STEP && steps < 60) { g.update(STEP); acc -= STEP; steps++; } if (steps >= 60) acc = 0; } });
+        guarded('red (segundo plano)', function () { session.step(dt); });
       };
     } catch (e) { bgWorker = null; }
   }
 
+  /** Un error en un cuadro (dibujo, interfaz, red) se avisa por consola, pero el juego y la conexión siguen. */
+  const frameWarned = {};
+  function guarded(where, fn) {
+    try { fn(); } catch (e) {
+      const t = performance.now();
+      if (t - (frameWarned[where] || 0) > 5000) { frameWarned[where] = t; console.warn('[cuadro] ' + where + ':', e); }
+    }
+  }
   function frame(now) {
+    requestAnimationFrame(frame);           // primero: aunque algo falle, el próximo cuadro llega igual
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     if (session) {
@@ -376,22 +385,21 @@
         if (!g.paused && !g.over) {
           acc += dt * SPEED;
           let steps = 0;
-          while (acc >= STEP && steps < 40) { g.update(STEP); acc -= STEP; steps++; }
+          try { while (acc >= STEP && steps < 40) { g.update(STEP); acc -= STEP; steps++; } }
+          catch (e) { acc = 0; guarded('simulación', function () { throw e; }); }
           if (steps >= 40) acc = 0;
         } else {
           acc = 0;
           if (g.over) g.updateFx(dt);
         }
       } else {
-        world.updateFx(dt);
+        guarded('efectos', function () { world.updateFx(dt); });
       }
-      session.step(dt);
-      updateCamera(dt);
-      updateHover();
-      renderer.draw(dt);
-      hud.update(dt);
+      guarded('red', function () { session.step(dt); });
+      guarded('cámara', function () { updateCamera(dt); updateHover(); });
+      guarded('dibujo', function () { renderer.draw(dt); });
+      guarded('interfaz', function () { hud.update(dt); });
     }
-    requestAnimationFrame(frame);
   }
 
   M.App = { showSelect: showSelect, teardownView: teardownView, startSolo: startSolo, startHosted: startHosted, startClient: startClient,

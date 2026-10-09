@@ -100,6 +100,11 @@
       return html;
     }
 
+    /** Avisa por consola (una vez cada tanto) sin cortar el resto de la interfaz. */
+    warnOnce(where, e) {
+      const t = performance.now(); this.warned = this.warned || {};
+      if (t - (this.warned[where] || 0) > 5000) { this.warned[where] = t; console.warn('[interfaz] ' + where + ':', e); }
+    }
     showNotice(text) {
       this.notice = text; this.noticeUntil = this.game.time + 6;
       if (!$('shop').classList.contains('hidden')) this.shopResult(text);
@@ -166,7 +171,7 @@
       this.xpFill.style.width = (p.level >= 18 ? 100 : p.xp / p.xpToNext() * 100) + '%';
 
       this.renderer.drawMinimap(this.mctx, 220);
-      this.extra.update(dt);
+      try { this.extra.update(dt); } catch (e) { this.warnOnce('anuncios', e); }
       // sonidos de la interfaz: subir de nivel, comprar/vender
       if (p.level > this.lastLevel && M.Audio) M.Audio.sfx('levelup');
       this.lastLevel = p.level;
@@ -183,7 +188,7 @@
       $('gold').textContent = Math.floor(p.gold);
       const fps = $('fps');
       if (fps) { const on = !!M.Settings.get('showFps'); fps.style.display = on ? '' : 'none'; if (on) fps.textContent = Math.round(this.renderer.fps) + ' FPS'; }
-      this.extra.slowUpdate();
+      try { this.extra.slowUpdate(); } catch (e) { this.warnOnce('paneles', e); }
       $('stats').innerHTML =
         '<span>Daño <b>' + Math.round(p.ad) + '</b></span><span>Poder <b>' + Math.round(p.ap) + '</b></span>' +
         '<span>Armadura <b>' + Math.round(p.getArmor()) + '</b></span><span>Res. mág. <b>' + Math.round(p.getMr()) + '</b></span>' +

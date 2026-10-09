@@ -950,7 +950,7 @@
         t.spree = 0; t.multi = 0;
         const by = killer ? '' : !src ? 'la fuente' : src.type === 'tower' ? 'una torre' : src.type === 'minion' ? 'los súbditos' : src.type === 'monster' ? 'un monstruo' : '';
         const ann = { k: 'kill', killer: killer ? killer.id : 0, by: by, victim: t.id, team: 1 - t.team, assists: helpers.map(function (a) { return a.id; }),
-          first: first, multi: multi, spree: spree, shutdown: ended >= 3 ? ended : 0, recap: this.deathRecap(t) };
+          first: first, multi: multi, spree: spree, shutdown: ended >= 3 ? ended : 0, recap: this.safeDeathRecap(t) };
         if (killer) this.addFeed(killer.name + ' eliminó a ' + t.name, kc, null, ann);
         else this.addFeed(t.name + ' fue ejecutado por ' + (by || 'el entorno'), kc, null, ann);
         if (this.champions.every(function (c) { return c.team !== t.team || c.dead; })) this.addFeed('¡As! Cayó todo el equipo ' + M.TEAM_NAMES[t.team], kc, null, { k: 'ace', team: t.team });
@@ -979,6 +979,10 @@
       }
     }
 
+    /** Igual que deathRecap, pero si algo falla no frena la muerte ni la partida. */
+    safeDeathRecap(t) {
+      try { return this.deathRecap(t); } catch (e) { console.warn('[resumen de muerte]', e); return null; }
+    }
     /** Resumen de los últimos 15 s de daño recibido: por fuente y por habilidad. */
     deathRecap(t) {
       const since = this.time - 15, by = {};

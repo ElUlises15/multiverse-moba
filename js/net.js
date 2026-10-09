@@ -71,6 +71,42 @@
     }).catch(function () { return null; });
   };
 
+  // ======================= Envío seguro =======================
+  /** Tope por mensaje: algunos navegadores aceptan como máximo 64 KB por mensaje del canal de datos, y si un envío
+   *  falla PeerJS cierra la conexión entera. Nos quedamos bastante por debajo. */
+  Net.MAX_MSG = 60000;
+  let warnAt = {};
+  Net.warn = function (where, e) {
+    const now = Date.now();
+    if (now - (warnAt[where] || 0) < 5000) return;          // sin inundar la consola
+    warnAt[where] = now;
+    console.warn('[red] ' + where + ': ' + (e && e.message ? e.message : e));
+  };
+  /** Convierte un mensaje en texto sin que nunca tire una excepción: si no se puede (objetos circulares) o es
+   *  demasiado grande, saca primero los eventos y después avisa y no manda nada (devuelve null). */
+  Net.encode = function (msg) {
+    let str = null;
+    try { str = JSON.stringify(msg); } catch (e) { Net.warn('mensaje no serializable', e); }
+    if (str != null && str.length <= Net.MAX_MSG) return str;
+    if (msg && msg.k === 's' && msg.e) {
+      // primero se descartan efectos y textos (son cosméticos); los avisos del feed se conservan sin el resumen de muerte
+      const fd = (msg.e.fd || []).map(function (f) { return { text: String(f.text || ''), color: String(f.color || '#fff'), time: +f.time || 0, ann: null }; });
+      try { str = JSON.stringify({ k: 's', s: msg.s, e: { fx: [], tx: [], fd: fd } }); } catch (e) { str = null; Net.warn('foto no serializable', e); }
+      if (str != null && str.length <= Net.MAX_MSG) { Net.warn('mensaje grande', 'se recortaron los efectos (' + (str.length) + ' bytes)'); return str; }
+    }
+    Net.warn('mensaje descartado', str == null ? 'no se pudo convertir' : 'demasiado grande (' + str.length + ' bytes)');
+    return null;
+  };
+  /** Lee un mensaje recibido; si viene roto, avisa y lo ignora. */
+  Net.decode = function (d) {
+    if (typeof d !== 'string') return d;
+    try { return JSON.parse(d); } catch (e) { Net.warn('mensaje ilegible', e); return null; }
+  };
+  /** Llama a un manejador sin que una excepción corte la conexión ni el resto de los mensajes. */
+  Net.safeCall = function (where, fn, a, b) {
+    try { return fn(a, b); } catch (e) { Net.warn(where, e); console.warn(e); return undefined; }
+  };
+
   // ======================= Transportes =======================
   /** Anfitrión con PeerJS. handlers: { ready(code), join(id), message(id, msg), leave(id), error(text), status(text) } */
   function PeerHost(code, h) {
@@ -83,7 +119,7 @@
       peer.on('open', function () { if (!wasOpen) { wasOpen = true; h.ready(code); } else if (h.status) h.status('Reconectado con el servidor. La sala sigue abierta.'); });
       peer.on('connection', function (conn) {
         conn.on('open', function () { self.conns[conn.peer] = conn; h.join(conn.peer); });
-        conn.on('data', function (d) { h.message(conn.peer, typeof d === 'string' ? JSON.parse(d) : d); });
+        conn.on('data', function (d) { const m = Net.decode(d); if (m) Net.safeCall('mensaje del jugador', h.message, conn.peer, m); });
         conn.on('close', function () { if (self.conns[conn.peer]) { delete self.conns[conn.peer]; h.leave(conn.peer); } });
         conn.on('error', function () { if (self.conns[conn.peer]) { delete self.conns[conn.peer]; h.leave(conn.peer); } });
       });
@@ -104,7 +140,14 @@
     });
     window.addEventListener('pagehide', function () { self.close(); });
   }
-  PeerHost.prototype.send = function (id, msg) { if (this.closed) return; const c = this.conns[id]; if (c && c.open) c.send(JSON.stringify(msg)); };
+  PeerHost.prototype.send = function (id, msg) {
+    if (this.closed) return;
+    const c = this.conns[id];
+    if (!c || !c.open) return;
+    const str = Net.encode(msg);
+    if (str == null) return;
+    try { c.send(str); } catch (e) { Net.warn('envío al jugador', e); }
+  };
   PeerHost.prototype.close = function () { this.closed = true; try { if (this.peer) this.peer.destroy(); } catch (e) { /* nada */ } };
   PeerHost.prototype.diag = function (id) { const c = this.conns[id]; return Net.describeConnection(c && c.peerConnection); };
 
@@ -142,7 +185,7 @@
         conn.on('open', function () {
           opened = true; clearTimeout(self.timer); h.open();
         });
-        conn.on('data', function (d) { h.message(typeof d === 'string' ? JSON.parse(d) : d); });
+        conn.on('data', function (d) { const m = Net.decode(d); if (m) Net.safeCall('mensaje del anfitrión', h.message, m); });
         conn.on('close', function () { if (opened) h.close(); });
         conn.on('error', function (e) { if (opened) h.error(Net.peerError(e)); else fail(Net.peerError(e)); });
       });
@@ -156,7 +199,12 @@
     });
     window.addEventListener('pagehide', function () { self.close(); });
   }
-  PeerClient.prototype.send = function (msg) { if (this.closed) return; if (this.conn && this.conn.open) this.conn.send(JSON.stringify(msg)); };
+  PeerClient.prototype.send = function (msg) {
+    if (this.closed || !this.conn || !this.conn.open) return;
+    const str = Net.encode(msg);
+    if (str == null) return;
+    try { this.conn.send(str); } catch (e) { Net.warn('envío al anfitrión', e); }
+  };
   PeerClient.prototype.close = function () { this.closed = true; clearTimeout(this.timer); try { if (this.peer) this.peer.destroy(); } catch (e) { /* nada */ } };
   PeerClient.prototype.diag = function () { return Net.describeConnection(this.conn && this.conn.peerConnection); };
   Net.peerError = function (e) {
@@ -179,7 +227,7 @@
       if (!m || m.to !== 'host') return;
       if (m.type === 'hello') { self.peers[m.from] = performance.now(); ch.postMessage({ to: m.from, type: 'welcome' }); h.join(m.from); }
       else if (m.type === 'bye') { if (self.peers[m.from]) { delete self.peers[m.from]; h.leave(m.from); } }
-      else if (self.peers[m.from]) { self.peers[m.from] = performance.now(); if (m.type === 'data') h.message(m.from, m.data); }
+      else if (self.peers[m.from]) { self.peers[m.from] = performance.now(); if (m.type === 'data') { const d = Net.decode(m.data); if (d) Net.safeCall('mensaje del jugador', h.message, m.from, d); } }
       else if (m.type === 'ping' || m.type === 'data') ch.postMessage({ to: m.from, type: 'closed' });   // lo habíamos dado por ido: que se entere
     };
     // sin noticias de una pestaña en 6 s = se fue (por si se cerró sin avisar)
@@ -195,7 +243,12 @@
     window.addEventListener('pagehide', this.onHide);
     setTimeout(function () { h.ready(code); }, 0);
   }
-  LocalHost.prototype.send = function (id, msg) { if (this.closed) return; this.ch.postMessage({ to: id, type: 'data', data: msg }); };
+  LocalHost.prototype.send = function (id, msg) {
+    if (this.closed) return;
+    const str = Net.encode(msg);       // mismas reglas que en línea: solo datos simples
+    if (str == null) return;
+    try { this.ch.postMessage({ to: id, type: 'data', data: str }); } catch (e) { Net.warn('envío local', e); }
+  };
   LocalHost.prototype.close = function () {
     if (this.closed) return;
     this.closed = true; clearInterval(this.watch); window.removeEventListener('pagehide', this.onHide);
@@ -211,7 +264,7 @@
       const m = ev.data;
       if (!m || (m.to !== self.id && m.to !== '*')) return;
       if (m.type === 'welcome' && !open) { open = true; h.open(); }
-      else if (m.type === 'data') h.message(m.data);
+      else if (m.type === 'data') { const d = Net.decode(m.data); if (d) Net.safeCall('mensaje del anfitrión', h.message, d); }
       else if (m.type === 'closed') h.close();
     };
     ch.postMessage({ to: 'host', from: this.id, type: 'hello' });
@@ -220,7 +273,12 @@
     window.addEventListener('pagehide', this.onHide);
     setTimeout(function () { if (!open && !self.closed) h.error('No existe una sala local con ese código (abrila en otra pestaña de este navegador).', { retry: true }); }, 2500);
   }
-  LocalClient.prototype.send = function (msg) { if (this.closed) return; this.ch.postMessage({ to: 'host', from: this.id, type: 'data', data: msg }); };
+  LocalClient.prototype.send = function (msg) {
+    if (this.closed) return;
+    const str = Net.encode(msg);
+    if (str == null) return;
+    try { this.ch.postMessage({ to: 'host', from: this.id, type: 'data', data: str }); } catch (e) { Net.warn('envío local', e); }
+  };
   LocalClient.prototype.close = function () {
     if (this.closed) return;
     this.closed = true; clearInterval(this.ping); window.removeEventListener('pagehide', this.onHide);
@@ -248,7 +306,8 @@
       o.cd = u.cds.map(r2); o.rc = u.recalling ? r2(u.recalling.t) : 0;
       o.ad = r1(u.ad); o.ap = r1(u.ap); o.ar = r1(u.getArmor()); o.mr = r1(u.getMr()); o.as = r2(u.getAttackSpeed());
       o.ms = r1(u.getMoveSpeed()); o.cr = r2(u.critChance); o.hs = r1(u.haste); o.ls = r2(u.getLifesteal()); o.rg = u.attackRange;
-      o.bf = u.buffs.filter(function (b) { return b.remaining > 0 && b.remaining < 600; }).slice(0, 10).map(function (b) { return [b.type, r2(b.remaining), r2(b.duration || b.remaining), r2(b.amount || 0)]; });
+      o.bf = u.buffs.filter(function (b) { return b.remaining > 0 && b.remaining < 600; }).slice(0, 10).map(function (b) { const am = typeof b.amount === 'number' && isFinite(b.amount) ? b.amount : 0, du = typeof b.duration === 'number' && isFinite(b.duration) ? b.duration : b.remaining;
+        return [String(b.type || ''), r2(b.remaining), r2(du), r2(am)]; });
       o.sh = r1(u.shieldAmount()); o.ca = r2(u.castAt == null ? -9 : u.castAt); o.cS = u.castSlot || 0; o.co = u.championsOnly ? 1 : 0;
     } else if (hidden) return null;
     o.x = r1(u.x); o.yy = r1(u.y); o.f = r2(u.facing);
@@ -290,11 +349,51 @@
     return out;
   };
   /** Eventos nuevos (efectos, textos, avisos) desde la última foto que recibió ese cliente. */
+  /** Solo datos simples (números, textos, booleanos y listas/objetos de eso), sin referencias a unidades. */
+  function plain(v, depth) {
+    if (v == null) return null;
+    const t = typeof v;
+    if (t === 'number') return isFinite(v) ? v : 0;
+    if (t === 'string') return v.length > 300 ? v.slice(0, 300) : v;
+    if (t === 'boolean') return v;
+    if (t !== 'object' || depth > 3) return null;
+    if (v.type && v.id != null && (v.hp != null || v.buffs)) return v.id;         // una unidad: se manda solo su id
+    if (Array.isArray(v)) { const out = []; for (let i = 0; i < v.length && i < 40; i++) out.push(plain(v[i], depth + 1)); return out; }
+    const o = {};
+    for (const k in v) { if (k === 'to' || k === 'seenAnn') continue; const x = plain(v[k], depth + 1); if (x !== null || v[k] === null) o[k] = x; }
+    return o;
+  }
+  Net.plain = function (v) { return plain(v, 0); };
+  /** Anuncio (asesinato, torre, nexo, as) con solo ids, textos y números. */
+  Net.packAnn = function (a) {
+    if (!a || typeof a !== 'object') return null;
+    const id = function (x) { return x && typeof x === 'object' ? (x.id | 0) : (+x || 0); };
+    const out = { k: String(a.k || '') };
+    if (a.team != null) out.team = a.team | 0;
+    if (a.k === 'kill') {
+      out.killer = id(a.killer); out.victim = id(a.victim); out.by = String(a.by || '');
+      out.assists = Array.isArray(a.assists) ? a.assists.slice(0, 5).map(id) : [];
+      out.first = !!a.first; out.multi = a.multi | 0; out.spree = a.spree | 0; out.shutdown = a.shutdown | 0;
+      const r = a.recap;
+      if (r && Array.isArray(r.rows)) {
+        out.recap = { total: +r.total || 0, rows: r.rows.slice(0, 6).map(function (row) {
+          return { id: id(row.id), name: String(row.name || ''), type: String(row.type || ''), df: String(row.df || ''), team: row.team | 0, total: +row.total || 0,
+            parts: (Array.isArray(row.parts) ? row.parts : []).slice(0, 5).map(function (pt) { return { l: String(pt.l || ''), k: String(pt.k || ''), a: +pt.a || 0 }; }) };
+        }) };
+      }
+    }
+    if (a.lane != null) out.lane = String(a.lane);
+    return out;
+  };
   Net.events = function (g, champId, since) {
     const fx = [], tx = [], fd = [];
-    for (const f of g.fx) if (f.id > since.fx && (!f.to || f.to.indexOf(champId) >= 0)) fx.push(f);
-    for (const t of g.texts) if (t.id > since.tx && (!t.to || t.to.indexOf(champId) >= 0)) tx.push({ x: r1(t.x), y: r1(t.y), text: t.text, color: t.color, big: t.big, life: t.life, max: t.max });
-    for (const f of g.feed) if (f.id > since.fd && (!f.to || f.to.indexOf(champId) >= 0)) fd.push({ text: f.text, color: f.color, time: f.time, ann: f.ann || null });
+    for (const f of g.fx) if (f.id > since.fx && (!f.to || f.to.indexOf(champId) >= 0)) { const o = plain(f, 0); if (o) fx.push(o); }
+    for (const t of g.texts) if (t.id > since.tx && (!t.to || t.to.indexOf(champId) >= 0)) tx.push({ x: r1(t.x), y: r1(t.y), text: String(t.text), color: String(t.color || '#fff'), big: !!t.big, life: +t.life || 1, max: +t.max || 1 });
+    for (const f of g.feed) if (f.id > since.fd && (!f.to || f.to.indexOf(champId) >= 0)) {
+      let ann = null;
+      try { ann = Net.packAnn(f.ann); } catch (e) { Net.warn('anuncio', e); }
+      fd.push({ text: String(f.text), color: String(f.color || '#fff'), time: +f.time || 0, ann: ann });
+    }
     return { fx: fx, tx: tx, fd: fd };
   };
 
@@ -385,7 +484,12 @@
         if (o.sg) u.buffs.push({ type: 'stealth', amount: 1, remaining: 1 });
         if (o.un) u.buffs.push({ type: 'undying', amount: 1, remaining: 1 });
         if (o.gr) u.buffs.push({ type: 'grow', amount: o.gr, remaining: 1 });
-        if (o.bf) u.buffs = o.bf.map(function (a) { return { type: a[0], remaining: a[1], duration: a[2], amount: a[3] }; });
+        if (Array.isArray(o.bf)) {
+          // los efectos detallados (para el panel del objetivo) se suman a las marcas de arriba sin duplicarlas
+          const flags = u.buffs;
+          u.buffs = o.bf.filter(function (a) { return Array.isArray(a); }).map(function (a) { return { type: String(a[0]), remaining: +a[1] || 0, duration: +a[2] || 0, amount: +a[3] || 0 }; });
+          for (const fl of flags) if (!u.buffs.some(function (b) { return b.type === fl.type; })) u.buffs.push(fl);
+        }
         u.feared = !!o.fr;
         u.targetId = o.tg || 0;
         u.facing = o.f;
@@ -421,9 +525,10 @@
       });
       if (s.cp) s.cp.forEach((v, i) => { if (this.camps[i]) this.camps[i].respawnAt = v; });
       if (ev) {
-        for (const f of ev.fx) { f.life = f.max; this.fx.push(f); }
-        for (const x of ev.tx) this.texts.push(x);
-        for (const f of ev.fd) this.feed.push(f);
+        // un evento raro nunca corta la sesión: se avisa por consola y se sigue con el resto
+        for (const f of ev.fx || []) { try { if (f && typeof f === 'object') { f.life = f.max; this.fx.push(f); } } catch (e) { Net.warn('efecto', e); } }
+        for (const x of ev.tx || []) { if (x && typeof x === 'object') this.texts.push(x); }
+        for (const f of ev.fd || []) { if (f && typeof f === 'object') this.feed.push(f); }
         if (this.feed.length > 30) this.feed.splice(0, this.feed.length - 30);
       }
     }
@@ -481,9 +586,10 @@
     onMessage(id, msg) {
       const cl = this.clients[id];
       if (!cl || !msg) return;
-      if (msg.k === 'cmd') {
+      if (msg.k === 'cmd' && msg.c && typeof msg.c === 'object') {
         const c = this.game.humans[cl.slot];
-        const err = this.game.command(c, msg.c);
+        let err = null;
+        try { err = this.game.command(c, msg.c); } catch (e) { Net.warn('orden del jugador (' + msg.c.t + ')', e); console.warn(e); return; }
         if (err && err !== 'no' && (msg.c.t === 'buy' || msg.c.t === 'sell' || msg.c.t === 'buyPartial')) this.transport.send(id, { k: 'msg', text: err, shop: msg.c.t === 'buyPartial' });
       }
     }
@@ -507,10 +613,14 @@
       const snaps = {};
       for (const id in this.clients) {
         const cl = this.clients[id];
-        const s = snaps[cl.team] || (snaps[cl.team] = Net.snapshot(g, cl.team));
-        const ev = Net.events(g, cl.champId, cl.since);
-        cl.since = { fx: this.game.seq, tx: this.game.seq, fd: this.game.seq };
-        this.transport.send(id, { k: 's', s: s, e: ev });
+        // si algo falla armando la foto de un jugador, se avisa y se sigue: nunca se corta la sesión
+        try {
+          const s = snaps[cl.team] || (snaps[cl.team] = Net.snapshot(g, cl.team));
+          let ev;
+          try { ev = Net.events(g, cl.champId, cl.since); } catch (e) { Net.warn('eventos', e); ev = { fx: [], tx: [], fd: [] }; }
+          cl.since = { fx: this.game.seq, tx: this.game.seq, fd: this.game.seq };
+          this.transport.send(id, { k: 's', s: s, e: ev });
+        } catch (e) { Net.warn('foto para ' + id, e); console.warn(e); }
       }
     }
     close() { this.closed = true; this.transport.close(); }
@@ -535,8 +645,11 @@
     }
     onMessage(msg) {
       this.lastMsg = performance.now();
-      if (msg.k === 's') this.world.applySnapshot(msg.s, msg.e, performance.now() / 1000);
-      else if (msg.k === 'msg' && this.onNotice) this.onNotice(msg.text);
+      if (!msg) return;
+      try {
+        if (msg.k === 's' && msg.s) this.world.applySnapshot(msg.s, msg.e, performance.now() / 1000);
+        else if (msg.k === 'msg' && this.onNotice) this.onNotice(String(msg.text || ''));
+      } catch (e) { Net.warn('foto del anfitrión', e); console.warn(e); }
     }
     step(dt) { this.world.interpolate(performance.now() / 1000, dt); }
     close() { this.transport.close(); }

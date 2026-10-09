@@ -627,6 +627,81 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
       await cli.evaluate(() => MOBA.debug.cmd({ t: 'learn', s: 0 }));
       await host.waitForFunction(() => MOBA.debug.game.champions.find((c) => c.def.id === 'vex' && c.team === 1).ranks[0] === 1, null, { timeout: 10000 });
       check(tag + ': el cliente aprende una habilidad', true);
+
+      // ---------- Regresión: asesinatos del cliente por la red (antes desconectaba al que se unió) ----------
+      {
+        // los anuncios que muestra cada pantalla, desde su propio punto de vista
+        const spy = () => { const h = MOBA.debug.hud().extra; window._anns = []; const o = h.showBanner.bind(h); h.showBanner = function (a) { window._anns.push(a.title + ' | ' + a.sub); return o(a); };
+          window._annText = () => { const w = MOBA.debug.game, me = w.player, hx = MOBA.debug.hud().extra; return w.feed.filter((f) => f.ann).map((f) => { const a = MOBA.announceText(f.ann, me, hx.byId.bind(hx)); return a ? a.title + ' | ' + a.sub : null; }).filter(Boolean); }; };
+        await cli.evaluate(spy); await host.evaluate(spy);
+        await cli.evaluate(() => { const s = MOBA.debug.session, o = s.onMessage.bind(s); s.onMessage = function (m) { if (m && m.k === 's') window._lastSnap = m; return o(m); }; });
+        const VEX = (g) => g.champions.find((c) => c.def.id === 'vex' && c.team === 1);
+        // 1) el cliente mata con un ataque básico a un enemigo aturdido y con poca vida
+        const eid = await host.evaluate(() => {
+          const g = MOBA.debug.game, v = g.champions.find((c) => c.def.id === 'vex' && c.team === 1);
+          v.x = M_W(); v.y = M_W(); v.moveTarget = null; v.target = null;
+          function M_W() { return MOBA.MAP.width / 2; }
+          const e = g.champions.find((c) => c.team === 0 && !c.human && !c.dead);
+          e.x = v.x + 120; e.y = v.y; e.hp = 6; e.addBuff({ type: 'stun', amount: 1, duration: 8 }); e.lastDamagers = {};
+          return e.id;
+        });
+        await cli.evaluate((id) => MOBA.debug.cmd({ t: 'attack', id: id }), eid);
+        await host.waitForFunction((id) => MOBA.debug.game.champions.find((c) => c.id === id).dead, eid, { timeout: 30000 });
+        // 2) ataque con habilidad que mata (crédito del cliente) y 3) asesinato doble
+        await host.evaluate(() => {
+          const g = MOBA.debug.game, v = g.champions.find((c) => c.def.id === 'vex' && c.team === 1);
+          const e = g.champions.find((c) => c.team === 0 && !c.human && !c.dead); e.hp = 1; g.damage(v, e, 500, 'magic', { label: 'Prueba de habilidad' });
+        });
+        // 4) un bot aliado mata con asistencia del cliente
+        await host.evaluate(() => {
+          const g = MOBA.debug.game, v = g.champions.find((c) => c.def.id === 'vex' && c.team === 1);
+          const ally = g.champions.find((c) => c.team === 1 && !c.human && !c.dead), e = g.champions.find((c) => c.team === 0 && !c.human && !c.dead);
+          g.damage(v, e, 50, 'magic'); g.damage(ally, e, 99999, 'true');
+        });
+        // 5) el cliente tira una torre
+        await host.evaluate(() => {
+          const g = MOBA.debug.game, v = g.champions.find((c) => c.def.id === 'vex' && c.team === 1);
+          const tw = g.structures.find((s) => s.type === 'tower' && s.team === 0 && !s.dead && s.vulnerable !== false && s.isTargetable()); tw.hp = 1; g.damage(v, tw, 100, 'true');
+        });
+        // 6) el cliente muere (con varias fuentes de daño para el resumen de muerte)
+        await host.evaluate(() => {
+          const g = MOBA.debug.game, v = g.champions.find((c) => c.def.id === 'vex' && c.team === 1);
+          const host = g.champions.find((c) => c.human && c.team === 0), bot = g.champions.find((c) => c.team === 0 && !c.human && !c.dead);
+          if (bot) g.damage(bot, v, 120, 'physical', { basic: true });
+          g.damage(host, v, 99999, 'magic', { label: 'Bola de Fuego' });
+        });
+        await cli.waitForFunction(() => MOBA.debug.game.player.dead && window._annText().length >= 5, null, { timeout: 20000 });
+        await cli.waitForTimeout(800);
+        const cs = await cli.evaluate(() => ({ texts: window._annText(), sess: !!MOBA.debug.session && !MOBA.debug.session.local, game: !document.getElementById('game-screen').classList.contains('hidden'),
+          k: MOBA.debug.game.player.kills, a: MOBA.debug.game.player.assists, d: MOBA.debug.game.player.deaths, recap: !document.getElementById('death-recap').classList.contains('hidden'), recapTxt: document.getElementById('death-recap').textContent }));
+        const hs = await host.evaluate(() => ({ texts: window._annText(), human: MOBA.debug.game.champions.find((c) => c.def.id === 'vex' && c.team === 1).human, clients: Object.keys(MOBA.debug.session.clients || {}).length }));
+        console.log(tag + ' anuncios cliente:', JSON.stringify(cs.texts));
+        console.log(tag + ' anuncios anfitrión:', JSON.stringify(hs.texts));
+        const has = (arr, re) => arr.some((t) => re.test(t));
+        check(tag + ': el cliente mata y sigue conectado (no lo desconecta)', cs.sess && cs.game && hs.human && hs.clients === 1);
+        check(tag + ': el cliente ve "¡Has asesinado a un enemigo!" (primera sangre) al matar', has(cs.texts, /^¡Primera sangre! \| ¡Has asesinado a un enemigo! · Vex eliminó a /));
+        check(tag + ': el cliente ve su asesinato doble', has(cs.texts, /^¡Asesinato doble! \| ¡Has asesinado a un enemigo!/));
+        check(tag + ': asistencia del cliente: ve "¡Un enemigo ha sido asesinado!" y suma la asistencia', has(cs.texts, /\| ¡Un enemigo ha sido asesinado!|^¡Un enemigo ha sido asesinado!/) && cs.a >= 1);
+        check(tag + ': torre tirada por el cliente: "¡Tu equipo destruyó una torre!"', has(cs.texts, /^¡Tu equipo destruyó una torre!/));
+        check(tag + ': el cliente muere: "¡Has sido asesinado!" y ve el resumen de muerte', has(cs.texts, /^¡Has sido asesinado! \| Ignis eliminó a Vex/) && cs.recap && /Bola de Fuego/.test(cs.recapTxt));
+        check(tag + ': el anfitrión ve lo mismo desde su lado ("¡Un aliado ha sido asesinado!" / "¡Has asesinado a un enemigo!")', has(hs.texts, /¡Un aliado ha sido asesinado! · Vex eliminó a |^¡Un aliado ha sido asesinado! \| Vex eliminó a /) && has(hs.texts, /^¡Has asesinado a un enemigo! \| Ignis eliminó a Vex/));
+        check(tag + ': marcadores del cliente correctos (2 asesinatos, 1 asistencia, 1 muerte)', cs.k === 2 && cs.a === 1 && cs.d === 1);
+        // un evento roto no corta la sesión: se ignora con un aviso
+        const robust = await cli.evaluate(() => {
+          const s = MOBA.debug.session, w = s.world, before = w.feed.length, warn = console.warn; let warned = 0; console.warn = function () { warned++; };
+          try {
+            s.onMessage({ k: 's', s: null, e: null });
+            const last = window._lastSnap;
+            s.onMessage({ k: 's', s: last.s, e: { fx: [null, 5], tx: [null], fd: [{ text: 'aviso raro', ann: { k: 'kill', killer: 'raro', victim: { a: 1 }, recap: 7, assists: 'x' } }, null, { text: 'otro', ann: { k: 'tower', lane: { x: 1 } } }] } });
+            MOBA.debug.hud().extra.update(0.016); MOBA.debug.hud().extra.slowUpdate();
+          } finally { console.warn = warn; }
+          return { ok: !!MOBA.debug.session && w.feed.some((f) => f.text === 'aviso raro'), feed: w.feed.length };
+        });
+        check(tag + ': un mensaje o anuncio con datos raros se ignora sin cortar la sesión', robust.ok);
+        // que el cliente reaparezca para seguir con el resto de la prueba
+        await host.evaluate(() => { const v = MOBA.debug.game.champions.find((c) => c.def.id === 'vex' && c.team === 1); v.respawnTimer = 0.05; });
+        await cli.waitForFunction(() => !MOBA.debug.game.player.dead, null, { timeout: 20000 });
+      }
       if (mode === 'peer') {
         await cli.evaluate(() => { const r = MOBA.debug.renderer; r.camLocked = true; });
         await cli.waitForTimeout(800);
