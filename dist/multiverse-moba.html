@@ -187,7 +187,7 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ===== Ronda 5: escala de interfaz, configuración, tienda con árbol, FPS ===== */
 :root { --ui-scale: 1; }
-#bottom-panel, #minimap-wrap, #topbar, #right-col, #shop, #scoreboard, #hud-gear, #fps, #target-panel, #ally-frames, #announce, #death-recap { zoom: var(--ui-scale); }
+#bottom-panel, #minimap-wrap, #topbar, #right-col, #shop, #scoreboard, #hud-gear, #hud-fs, #fps, #target-panel, #ally-frames, #announce, #death-recap { zoom: var(--ui-scale); }
 .gear-btn { background: rgba(8,12,22,0.85); color: #dfe8ff; border: 1px solid #3a4a70; border-radius: 8px; font-size: 20px; width: 38px; height: 38px; cursor: pointer; line-height: 1; }
 .gear-btn:hover { background: #24304f; color: #ffd54a; }
 #hud-gear { position: absolute; top: 8px; left: calc(50% + 120px); }
@@ -370,6 +370,16 @@ body.team-shapes .kf-item img, body.team-shapes .tp-pic { border-style: double; 
 #scoreboard .sb-items { white-space: nowrap; } #scoreboard .sb-it { display: inline-block; width: 26px; height: 26px; border: 1px solid #2c3a5c; border-radius: 4px; margin-right: 2px; vertical-align: middle; background: #0d1424; }
 #scoreboard .sb-it img { width: 100%; height: 100%; }
 
+/* Pantalla completa */
+#menu-fs { position: absolute; top: 8px; right: 56px; }
+#hud-fs { position: absolute; top: 8px; left: calc(50% + 166px); }
+.fs-btn.on { color: #ffd54a; border-color: #ffd54a; }
+.set-fs { background: #24304f; color: #dfe8ff; border: 1px solid #3a4a70; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 14px; }
+.set-fs:hover { color: #ffd54a; }
+#fs-hint { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 9999; background: rgba(8,12,22,0.9); color: #fff; border: 1px solid #3a4a70;
+  border-radius: 8px; padding: 8px 16px; font-size: 14px; pointer-events: none; opacity: 0; transition: opacity .3s; }
+#fs-hint.show { opacity: 1; }
+
 </style>
 </head>
 <body>
@@ -377,6 +387,7 @@ body.team-shapes .kf-item img, body.team-shapes .tp-pic { border-style: double; 
   <div id="select-screen" class="screen">
     <header class="select-header">
       <button id="menu-gear" class="gear-btn" title="Configuración">⚙</button>
+      <button id="menu-fs" class="gear-btn fs-btn" title="Pantalla completa (evita que Ctrl+W y otros atajos cierren la pestaña)">⛶</button>
       <h1>Browser <span>Multiverse</span> MOBA</h1>
       <p class="subtitle">MOBA 5 contra 5 en 3D, en el navegador · jugá solo contra bots o con amigos por internet</p>
     </header>
@@ -412,6 +423,7 @@ body.team-shapes .kf-item img, body.team-shapes .tp-pic { border-style: double; 
       <b>Q W E R</b>: mantener para ver el alcance, soltar para lanzar hacia el mouse (clic derecho cancela) · <b>C</b> (mantener): ver tu alcance de ataque ·
       <b>B</b>: volver a la base (8 s) · <b>P</b>: tienda · <b>Tab</b>: marcador · <b>Y</b>: fijar/soltar cámara ·
       <b>Espacio</b>: centrar cámara · <b>S</b>: frenar · <b>Rueda</b>: zoom · <b>G</b> + clic (o Alt + clic): señal para tu equipo · <b>Esc</b>: pausa / menú<br>
+      <b>⛶ Pantalla completa</b> (botón arriba, o automática al empezar): así Ctrl+W, Ctrl+T y otros atajos no cierran la pestaña · <b>mantené Esc</b> para salir de pantalla completa (un toque de Esc sigue abriendo el menú) · si igual intentás cerrar, te pregunta "¿Seguro que querés salir?"<br>
       <b>⚙ Configuración</b> (arriba a la derecha, o Esc en partida): cambiá cualquier tecla, el modo de lanzamiento, la cámara, los gráficos, el volumen y los modos para daltonismo<br>
       <b>Mapa:</b> las paredes de la jungla se esquivan solas al hacer clic del otro lado · en los <b>arbustos</b> no te ven si el rival no tiene a nadie adentro ·
       al salir de tu base corrés +75% más rápido hasta entrar en combate
@@ -445,6 +457,7 @@ body.team-shapes .kf-item img, body.team-shapes .tp-pic { border-style: double; 
         <span class="team-score red" id="score-red">0</span>
       </div>
       <button id="hud-gear" class="gear-btn" title="Configuración (teclas, cámara, audio, daltonismo…)">⚙</button>
+      <button id="hud-fs" class="gear-btn fs-btn" title="Pantalla completa (evita que Ctrl+W y otros atajos cierren la pestaña)">⛶</button>
       <div id="right-col"><div id="kda-box"></div><div id="kill-portraits"></div><div id="killfeed"></div></div>
       <div id="target-panel" class="hidden"></div>
       <div id="ally-frames"></div>
@@ -4521,7 +4534,7 @@ window.MOBA = window.MOBA || {};
     teamShapes: false,
     teamColors: ['#38a3ff', '#ff4a4a'],
     camZoom: 1, camPitch: 56, edgePan: 1500, camLockDefault: true, camSmooth: 10,
-    uiScale: 1, quality: 'high', shadows: true, anime: true,
+    uiScale: 1, quality: 'high', shadows: true, anime: true, autoFullscreen: true,
     master: 80, music: 55, sfx: 80, mute: false,
     showFps: false, minionBars: 'damaged', lastHit: true, hpTicks: true, showNames: true, damageNumbers: true
   };
@@ -4683,7 +4696,9 @@ window.MOBA = window.MOBA || {};
           return this.row('Calidad', this.select('quality', [['low', 'Baja'], ['medium', 'Media'], ['high', 'Alta']]), 'Resolución interna del 3D') +
             this.row('Sombras', this.check('shadows')) +
             this.row('Estilo anime', this.check('anime'), 'Activado de fábrica: sombreado toon con contornos, colores más vivos y modelos hechos en Blender (por ahora: Ignis v2). Desactivalo para volver al estilo clásico. Se aplica en la próxima partida. También: ?anime=0 o ?anime=1') +
-            this.row('Tamaño de la interfaz', this.range('uiScale', 0.75, 1.5, 0.05, f.uiScale));
+            this.row('Tamaño de la interfaz', this.range('uiScale', 0.75, 1.5, 0.05, f.uiScale)) +
+            this.row('Pantalla completa', '<button class="fs-btn set-fs" data-label="1">' + (M.Fullscreen && M.Fullscreen.isOn() ? '⛶ Salir de pantalla completa' : '⛶ Pantalla completa') + '</button>', 'Con pantalla completa, Ctrl+W, Ctrl+T y otros atajos no cierran la pestaña (Chrome/Edge). Mantené Esc para salir.') +
+            this.row('Pantalla completa al empezar la partida', this.check('autoFullscreen'));
         case 'audio':
           return this.row('Volumen general', this.range('master', 0, 100, 1, f.master)) +
             this.row('Música', this.range('music', 0, 100, 1, f.music)) +
@@ -4745,6 +4760,105 @@ window.MOBA = window.MOBA || {};
   };
   // la captura va antes que cualquier otro manejador de teclado
   window.addEventListener('keydown', function (e) { if (UI.isOpen()) { UI.handleKey(e); e.stopPropagation(); } }, true);
+})(window.MOBA);
+
+</script>
+  <script>/* js/fullscreen.js */
+/* Pantalla completa + bloqueo de teclado (para que Ctrl+W, Ctrl+T, Ctrl+N, Ctrl+Tab, Esc… no cierren la pestaña),
+ * bloqueo de atajos del navegador que la página sí puede frenar y confirmación al salir durante una partida. */
+(function (M) {
+  'use strict';
+  const $ = function (id) { return document.getElementById(id); };
+  let hintTimer = 0, pendingAuto = false;
+
+  const FS = M.Fullscreen = {
+    supported: function () { return !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen); },
+    isOn: function () { return !!(document.fullscreenElement || document.webkitFullscreenElement); },
+    /** Tiene que llamarse desde un clic o una tecla (el navegador lo exige). */
+    enter: function () {
+      pendingAuto = false;
+      if (FS.isOn() || !FS.supported()) { FS.lockKeys(); return; }
+      const el = document.documentElement;
+      try {
+        const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : el.webkitRequestFullscreen();
+        if (p && p.then) p.then(function () { FS.lockKeys(); }).catch(function () { /* el navegador no lo permitió */ });
+      } catch (e) { /* nada */ }
+    },
+    exit: function () {
+      try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) { /* nada */ }
+      try { if (document.exitFullscreen) document.exitFullscreen().catch(function () {}); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); } catch (e) { /* nada */ }
+    },
+    toggle: function () { if (FS.isOn()) FS.exit(); else FS.enter(); },
+    /** Keyboard Lock (Chrome/Edge): con pantalla completa la página recibe Ctrl+W, Ctrl+T, Esc, etc. Para salir hay que MANTENER Esc. */
+    lockKeys: function () {
+      if (!navigator.keyboard || !navigator.keyboard.lock) { FS.hint('Pantalla completa · Esc para salir'); return; }
+      navigator.keyboard.lock().then(function () { FS.locked = true; FS.hint('Mantené Esc para salir de pantalla completa'); })
+        .catch(function () { FS.locked = false; FS.hint('Pantalla completa · Esc para salir'); });
+    },
+    hint: function (text) {
+      let el = $('fs-hint');
+      if (!el) { el = document.createElement('div'); el.id = 'fs-hint'; document.body.appendChild(el); }
+      el.textContent = text; el.classList.add('show');
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(function () { el.classList.remove('show'); }, 4500);
+    },
+    /** Al empezar una partida: si la opción está activada, entra (el clic de "Jugar"/"Empezar" ya lo hizo; si no, en el próximo clic o tecla). */
+    matchStarted: function () { if (M.Settings && M.Settings.get('autoFullscreen') && !FS.isOn()) pendingAuto = true; },
+    autoFromGesture: function () { if (M.Settings && M.Settings.get('autoFullscreen')) FS.enter(); },
+    updateButtons: function () {
+      const on = FS.isOn();
+      document.querySelectorAll('.fs-btn').forEach(function (b) {
+        b.classList.toggle('on', on);
+        b.title = on ? 'Salir de pantalla completa' + (FS.locked ? ' (o mantené Esc)' : '') : 'Pantalla completa (evita que Ctrl+W y otros atajos cierren la pestaña)';
+        if (b.dataset.label) b.textContent = on ? '⛶ Salir de pantalla completa' : '⛶ Pantalla completa';
+      });
+    }
+  };
+
+  function inMatch() { return !!(M.App && M.App.inMatch && M.App.inMatch()); }
+  function onlineLobby() { return !!(M.Lobby && M.Lobby.transport && M.Lobby.state); }
+  FS.inMatch = inMatch;
+
+  document.addEventListener('fullscreenchange', function () {
+    if (!FS.isOn()) { FS.locked = false; try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) { /* nada */ } }
+    FS.updateButtons();
+  });
+  document.addEventListener('webkitfullscreenchange', function () { FS.updateButtons(); });
+
+  // Botones (menú, partida y configuración) y entrada automática con el clic de empezar
+  document.addEventListener('click', function (e) {
+    const b = e.target.closest && e.target.closest('.fs-btn');
+    if (b) { e.preventDefault(); FS.toggle(); return; }
+    if (e.target.closest && e.target.closest('.play-btn, #lobby-start')) FS.autoFromGesture();
+  }, true);
+  // Si la partida empezó sin un clic (por ejemplo, el cliente cuando el anfitrión arranca): primer clic o tecla
+  const gesture = function (e) {
+    if (!pendingAuto || !inMatch()) return;
+    if (e.type === 'keydown' && (e.key === 'Escape' || e.target.tagName === 'INPUT')) return;
+    FS.enter();
+  };
+  window.addEventListener('pointerdown', gesture, true);
+  window.addEventListener('keydown', gesture, true);
+
+  // Atajos del navegador que la página puede frenar mientras jugás (Ctrl+W/T/N solo se frenan con pantalla completa + bloqueo)
+  const CTRL_BLOCK = { KeyS: 1, KeyP: 1, KeyF: 1, KeyD: 1, KeyR: 1, KeyQ: 1, KeyE: 1, KeyW: 1, KeyG: 1, KeyH: 1, KeyJ: 1, KeyK: 1, KeyL: 1, KeyO: 1, KeyU: 1, KeyB: 1, KeyN: 1, KeyT: 1, Digit1: 1, Digit2: 1, Digit3: 1, Digit4: 1, Digit5: 1, Digit6: 1, Digit7: 1, Digit8: 1, Digit9: 1, Tab: 1, PageUp: 1, PageDown: 1 };
+  window.addEventListener('keydown', function (e) {
+    if (!inMatch()) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    const c = e.code;
+    if ((e.ctrlKey || e.metaKey) && CTRL_BLOCK[c]) { e.preventDefault(); return; }
+    if (e.altKey && (c === 'KeyW' || c === 'KeyD' || c === 'KeyF' || c === 'ArrowLeft' || c === 'ArrowRight' || c === 'Home')) { e.preventDefault(); return; }
+    if (c === 'F5' || c === 'F3' || c === 'F6' || c === 'F7' || c === 'Backspace' || c === 'Space' || c === 'Tab' || c === 'Slash' || c === 'Quote' || c === 'BrowserBack') e.preventDefault();
+  }, true);
+
+  // Confirmación al cerrar o recargar durante una partida o en una sala en línea
+  window.addEventListener('beforeunload', function (e) {
+    if (!inMatch() && !onlineLobby()) return;
+    e.preventDefault();
+    e.returnValue = '¿Seguro que querés salir?';
+    return '¿Seguro que querés salir?';
+  });
 })(window.MOBA);
 
 </script>
@@ -20017,6 +20131,7 @@ MOBA.registerChampion({
     $('lobby-screen').classList.add('hidden');
     $('game-screen').classList.remove('hidden');
     session = s; world = s.world;
+    if (M.Fullscreen) M.Fullscreen.matchStarted();
     renderer = new M.Renderer($('game-canvas'), $('overlay-canvas'), world, { low: LOW });
     renderer.camLocked = !!M.Settings.get('camLockDefault');
     renderer.resize();
@@ -20361,7 +20476,7 @@ MOBA.registerChampion({
     }
   }
 
-  M.App = { showSelect: showSelect, teardownView: teardownView, startSolo: startSolo, startHosted: startHosted, startClient: startClient,
+  M.App = { inMatch: function () { return !!(session && world && !world.over); }, showSelect: showSelect, teardownView: teardownView, startSolo: startSolo, startHosted: startHosted, startClient: startClient,
     notice: function (t) { if (hud) hud.showNotice(t); } };
 
   // API de depuración (usada por los tests)

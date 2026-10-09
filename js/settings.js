@@ -20,7 +20,7 @@ window.MOBA = window.MOBA || {};
     teamShapes: false,
     teamColors: ['#38a3ff', '#ff4a4a'],
     camZoom: 1, camPitch: 56, edgePan: 1500, camLockDefault: true, camSmooth: 10,
-    uiScale: 1, quality: 'high', shadows: true, anime: true,
+    uiScale: 1, quality: 'high', shadows: true, anime: true, autoFullscreen: true,
     master: 80, music: 55, sfx: 80, mute: false,
     showFps: false, minionBars: 'damaged', lastHit: true, hpTicks: true, showNames: true, damageNumbers: true
   };
@@ -182,7 +182,9 @@ window.MOBA = window.MOBA || {};
           return this.row('Calidad', this.select('quality', [['low', 'Baja'], ['medium', 'Media'], ['high', 'Alta']]), 'Resolución interna del 3D') +
             this.row('Sombras', this.check('shadows')) +
             this.row('Estilo anime', this.check('anime'), 'Activado de fábrica: sombreado toon con contornos, colores más vivos y modelos hechos en Blender (por ahora: Ignis v2). Desactivalo para volver al estilo clásico. Se aplica en la próxima partida. También: ?anime=0 o ?anime=1') +
-            this.row('Tamaño de la interfaz', this.range('uiScale', 0.75, 1.5, 0.05, f.uiScale));
+            this.row('Tamaño de la interfaz', this.range('uiScale', 0.75, 1.5, 0.05, f.uiScale)) +
+            this.row('Pantalla completa', '<button class="fs-btn set-fs" data-label="1">' + (M.Fullscreen && M.Fullscreen.isOn() ? '⛶ Salir de pantalla completa' : '⛶ Pantalla completa') + '</button>', 'Con pantalla completa, Ctrl+W, Ctrl+T y otros atajos no cierran la pestaña (Chrome/Edge). Mantené Esc para salir.') +
+            this.row('Pantalla completa al empezar la partida', this.check('autoFullscreen'));
         case 'audio':
           return this.row('Volumen general', this.range('master', 0, 100, 1, f.master)) +
             this.row('Música', this.range('music', 0, 100, 1, f.music)) +

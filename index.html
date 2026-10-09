@@ -12,6 +12,7 @@
   <div id="select-screen" class="screen">
     <header class="select-header">
       <button id="menu-gear" class="gear-btn" title="Configuración">⚙</button>
+      <button id="menu-fs" class="gear-btn fs-btn" title="Pantalla completa (evita que Ctrl+W y otros atajos cierren la pestaña)">⛶</button>
       <h1>Browser <span>Multiverse</span> MOBA</h1>
       <p class="subtitle">MOBA 5 contra 5 en 3D, en el navegador · jugá solo contra bots o con amigos por internet</p>
     </header>
@@ -47,6 +48,7 @@
       <b>Q W E R</b>: mantener para ver el alcance, soltar para lanzar hacia el mouse (clic derecho cancela) · <b>C</b> (mantener): ver tu alcance de ataque ·
       <b>B</b>: volver a la base (8 s) · <b>P</b>: tienda · <b>Tab</b>: marcador · <b>Y</b>: fijar/soltar cámara ·
       <b>Espacio</b>: centrar cámara · <b>S</b>: frenar · <b>Rueda</b>: zoom · <b>G</b> + clic (o Alt + clic): señal para tu equipo · <b>Esc</b>: pausa / menú<br>
+      <b>⛶ Pantalla completa</b> (botón arriba, o automática al empezar): así Ctrl+W, Ctrl+T y otros atajos no cierran la pestaña · <b>mantené Esc</b> para salir de pantalla completa (un toque de Esc sigue abriendo el menú) · si igual intentás cerrar, te pregunta "¿Seguro que querés salir?"<br>
       <b>⚙ Configuración</b> (arriba a la derecha, o Esc en partida): cambiá cualquier tecla, el modo de lanzamiento, la cámara, los gráficos, el volumen y los modos para daltonismo<br>
       <b>Mapa:</b> las paredes de la jungla se esquivan solas al hacer clic del otro lado · en los <b>arbustos</b> no te ven si el rival no tiene a nadie adentro ·
       al salir de tu base corrés +75% más rápido hasta entrar en combate
@@ -80,6 +82,7 @@
         <span class="team-score red" id="score-red">0</span>
       </div>
       <button id="hud-gear" class="gear-btn" title="Configuración (teclas, cámara, audio, daltonismo…)">⚙</button>
+      <button id="hud-fs" class="gear-btn fs-btn" title="Pantalla completa (evita que Ctrl+W y otros atajos cierren la pestaña)">⛶</button>
       <div id="right-col"><div id="kda-box"></div><div id="kill-portraits"></div><div id="killfeed"></div></div>
       <div id="target-panel" class="hidden"></div>
       <div id="ally-frames"></div>
@@ -130,6 +133,7 @@
   <!-- Núcleo -->
   <script src="js/core.js"></script>
   <script src="js/settings.js"></script>
+  <script src="js/fullscreen.js"></script>
   <script src="assets/music/tracks.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/art.js"></script>

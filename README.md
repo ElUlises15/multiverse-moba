@@ -88,6 +88,13 @@ Viene **activado**. Para volver al estilo clásico, desactivalo en **Configuraci
 - Capturas en el juego (y comparación con otro GLB): `node tools/anime_compare.js screenshots/anime/ignis-v2 [v1.glb <prefijo> -0.3]`
 - Capturas en `screenshots/anime/` (`ignis-v2-render.png`, `ignis-v2-poses.png`, `ignis-v2-ingame-cerca.png`, `comparacion-v1-v2.png`).
 
+### Pantalla completa (para que Ctrl+W no cierre la pestaña)
+
+- Botón **⛶** arriba (menú y partida) o en **Configuración → Gráficos**. Por defecto la partida entra sola en pantalla completa al tocar **Jugar** / **¡Empezar partida!** (si te uniste a una sala, en tu primer clic o tecla); se desactiva en **Configuración → Gráficos → Pantalla completa al empezar la partida**.
+- En Chrome y Edge, con pantalla completa se activa el **bloqueo de teclado** (Keyboard Lock): Ctrl+W, Ctrl+T, Ctrl+N, Ctrl+Tab y Esc llegan al juego en vez de cerrar o cambiar la pestaña. Para salir de pantalla completa **mantené Esc** apretado; un toque corto de Esc sigue abriendo el menú.
+- Durante la partida se frenan los atajos que la página sí puede frenar (Ctrl+S, Ctrl+P, Ctrl+F, Ctrl+D, Ctrl+R/F5, Ctrl+Q/W/E/R, Alt+W, Retroceso, Espacio, Tab).
+- Si igual intentás cerrar o recargar en plena partida (o en una sala en línea), el navegador pregunta **"¿Seguro que querés salir?"**.
+
 ### Controles
 
 | Tecla | Acción |

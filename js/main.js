@@ -58,6 +58,7 @@
     $('lobby-screen').classList.add('hidden');
     $('game-screen').classList.remove('hidden');
     session = s; world = s.world;
+    if (M.Fullscreen) M.Fullscreen.matchStarted();
     renderer = new M.Renderer($('game-canvas'), $('overlay-canvas'), world, { low: LOW });
     renderer.camLocked = !!M.Settings.get('camLockDefault');
     renderer.resize();
@@ -402,7 +403,7 @@
     }
   }
 
-  M.App = { showSelect: showSelect, teardownView: teardownView, startSolo: startSolo, startHosted: startHosted, startClient: startClient,
+  M.App = { inMatch: function () { return !!(session && world && !world.over); }, showSelect: showSelect, teardownView: teardownView, startSolo: startSolo, startHosted: startHosted, startClient: startClient,
     notice: function (t) { if (hud) hud.showNotice(t); } };
 
   // API de depuración (usada por los tests)
