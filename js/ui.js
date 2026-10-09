@@ -18,7 +18,8 @@
         ['Todos'].concat(M.ROLES).forEach((r) => {
           const b = document.createElement('button');
           b.className = 'role-btn' + (r === this.filter ? ' active' : '');
-          b.textContent = r; b.dataset.role = r;
+          const n = r === 'Todos' ? M.champions.length : M.champions.filter((c) => c.role === r).length;
+          b.textContent = r + ' (' + n + ')'; b.dataset.role = r;
           b.onclick = () => { this.filter = r; this.init(this.opts); };
           filters.appendChild(b);
         });

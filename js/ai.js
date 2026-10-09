@@ -178,12 +178,22 @@
         if (farm && (slot === 3 || target.type !== 'minion')) continue;
         const kind = A.aiKind(ab);
         let ok = false;
+        const hpf = c.hp / c.maxHp;
+        // habilidades que cuestan vida (Creeper): no usarlas casi muerto
+        if (ab.selfDamage && hpf < 0.3) continue;
+        // "no-muerto" (Zombie W): guardarla para cuando la vida esté baja
+        if (ab.selfEffects && ab.selfEffects.some(function (e) { return e.type === 'undying'; })) {
+          if (hpf < 0.35 && !farm && d < 900) ok = A.cast(game, c, slot, c.x, c.y);
+          if (ok) return true;
+          continue;
+        }
         if (kind === 'damage') {
           if (defensive && !(ab.effects && ab.effects.some(function (e) { return e.type === 'stun' || e.type === 'slow'; }))) continue;
           let reach;
           if (ab.cast === 'self') reach = (ab.radius || 0) + target.radius;
           else if (ab.cast === 'target') reach = ab.range + target.radius;
           else if (ab.cast === 'area') reach = ab.range + (ab.radius || 0) * 0.5;
+          else if (ab.cast === 'cone') reach = ab.range * 0.9;
           else reach = ab.range * 0.92;
           if (d <= reach) {
             const time = ab.cast === 'skillshot' ? d / ab.speed : (ab.delay || 0);

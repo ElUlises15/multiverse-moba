@@ -1,6 +1,7 @@
 /* Sistema de habilidades genérico, dirigido por datos.
- * Tipos de lanzamiento (cast): skillshot, line, area, self, dash, target.
- * Efectos: slow, stun, knockback, dot, shield, haste, attackSpeed, armor, mr, lifesteal, heal, mana.
+ * Tipos de lanzamiento (cast): skillshot, line, area, self, dash, target, cone.
+ * Efectos: slow, stun, fear, knockback, pull, dot, armorShred, shield, haste, attackSpeed, armor, mr, lifesteal, heal, mana,
+ *          stealth (invisible), undying (no puede morir), grow (crece).
  */
 (function (M) {
   'use strict';
@@ -44,8 +45,15 @@
       else if (e.type === 'haste') parts.push('Velocidad: +' + U.fmtArr(Array.isArray(e.amount) ? e.amount.map(function (x) { return Math.round(x * 100); }) : Math.round(e.amount * 100)) + '%');
       else if (e.type === 'lifesteal') parts.push('Robo de vida: ' + U.fmtArr(Array.isArray(e.amount) ? e.amount.map(function (x) { return Math.round(x * 100); }) : Math.round(e.amount * 100)) + '%');
       else if (e.type === 'armor') parts.push('Armadura: +' + U.fmtArr(e.amount));
-      else if (e.type === 'dot') parts.push('Quemadura por s: ' + val(e.dps));
+      else if (e.type === 'dot') parts.push('Daño por s: ' + val(e.dps));
+      else if (e.type === 'fear') parts.push('Miedo: ' + U.fmtArr(e.duration) + ' s');
+      else if (e.type === 'armorShred') parts.push('Reducción de armadura y res.: ' + U.fmtArr(Array.isArray(e.amount) ? e.amount.map(function (x) { return Math.round(x * 100); }) : Math.round(e.amount * 100)) + '%');
+      else if (e.type === 'stealth') parts.push('Invisibilidad: ' + U.fmtArr(e.duration) + ' s');
+      else if (e.type === 'undying') parts.push('Inmortal: ' + U.fmtArr(e.duration) + ' s');
+      else if (e.type === 'knockback') parts.push('Empuje: ' + (e.distance || 250));
+      else if (e.type === 'pull') parts.push('Atrae al objetivo');
     }
+    if (ab.selfDamage) parts.push('Costo: ' + Math.round(ab.selfDamage * 100) + '% de la vida actual');
     parts.push('Enfriamiento: ' + U.fmtArr(ab.cd) + ' s');
     if (ab.mana) parts.push('Maná: ' + U.fmtArr(ab.mana));
     if (ab.range) parts.push('Alcance: ' + ab.range);
@@ -76,6 +84,31 @@
           if (target.type === 'tower' || target.type === 'nexus') break;
           target.addBuff({ type: e.type, amount: A.value(e.amount, caster, rank) || 1, duration: R(e.duration, rank) });
           break;
+        case 'fear': {
+          // Miedo: no puede actuar y huye despacio alejándose de quien lo asustó
+          if (target.isStatic) break;
+          const b = { type: 'stun', fear: true, amount: 1, duration: R(e.duration, rank) || 1 };
+          target.addBuff(b);
+          const o = origin || caster;
+          let dx = target.x - o.x, dy = target.y - o.y; const d = Math.hypot(dx, dy) || 1;
+          const sp = target.getMoveSpeed() * 0.55;
+          target.knock = { vx: dx / d * sp, vy: dy / d * sp, t: b.duration, fear: true };
+          target.windup = null; target.target = null;
+          break;
+        }
+        case 'pull': {
+          // Atraer hacia quien lanza (agarre)
+          if (target.isStatic) break;
+          let dx = caster.x - target.x, dy = caster.y - target.y; const d = Math.hypot(dx, dy) || 1;
+          const dist = Math.max(0, d - caster.radius - target.radius - 20);
+          target.knock = { vx: dx / d * dist / 0.25, vy: dy / d * dist / 0.25, t: 0.25 };
+          target.dash = null; target.windup = null;
+          break;
+        }
+        case 'armorShred':
+          if (target.isStatic) break;
+          target.addBuff({ type: 'armorShred', amount: A.value(e.amount, caster, rank), duration: R(e.duration, rank) || 3 });
+          break;
         case 'knockback': {
           if (target.isStatic || target.dash) break;
           const o = origin || caster;
@@ -89,7 +122,7 @@
           target.addBuff({ type: 'dot', amount: A.value(e.dps, caster, rank), duration: R(e.duration, rank), source: caster });
           break;
         case 'heal': {
-          const amt = A.value(e.amount, caster, rank);
+          const amt = A.value(e.amount, caster, rank) * (target.passives && target.passives.spirit ? 1.25 : 1);
           const before = target.hp;
           target.hp = Math.min(target.maxHp, target.hp + amt);
           if (target.human && target.hp - before >= 1) {
@@ -101,8 +134,9 @@
         case 'mana':
           target.mana = Math.min(target.maxMana, target.mana + A.value(e.amount, caster, rank));
           break;
-        default: // shield, haste, attackSpeed, armor, mr, lifesteal
-          target.addBuff({ type: e.type, amount: A.value(e.amount, caster, rank), duration: R(e.duration, rank) || 3 });
+        default: // shield, haste, attackSpeed, armor, mr, lifesteal, stealth, undying, grow
+          target.addBuff({ type: e.type, amount: A.value(e.amount, caster, rank) * (e.type === 'shield' && target.passives && target.passives.spirit ? 1.25 : 1),
+            duration: R(e.duration, rank) || 3 });
       }
     }
   };
@@ -114,6 +148,12 @@
     let dmg = A.value(ab.damage, caster, rank);
     if (ab.executeBonus) dmg *= 1 + ab.executeBonus * (1 - target.hp / target.maxHp);
     if (dmg > 0) game.damage(caster, target, dmg, ab.damageType || 'magic');
+    // Pasiva única "Eco": daño mágico extra cada 6 s
+    if (dmg > 0 && caster.passives && caster.passives.echo && game.time >= (caster.echoReady || 0) && !target.dead) {
+      caster.echoReady = game.time + 6;
+      game.damage(caster, target, 60 + 0.1 * caster.ap, 'magic');
+      game.pushFx({ type: 'ring', x: target.x, y: target.y, r0: 20, r1: 160, color: '#9fe8ff', life: 0.35, max: 0.35 });
+    }
     if (!target.dead && ab.effects) A.applyEffects(game, caster, ab.effects, target, origin || caster, rank);
     game.particles(target.x, target.y, ab.color, 6, 300);
   };
@@ -125,6 +165,20 @@
       if (U.distXY(u.x, u.y, x, y) <= r + u.radius) { A.hit(game, caster, ab, u, { x: x, y: y }); n++; }
     }
     return n;
+  };
+
+  /** Cono desde (x, y) en dirección `ang`: alcance r y apertura total `spread` (grados). */
+  A.hitCone = function (game, caster, ab, x, y, ang, r, spread) {
+    const half = spread * Math.PI / 360;
+    for (const u of game.units.slice()) {
+      if (u.team === caster.team || !A.isHittable(u)) continue;
+      const dx = u.x - x, dy = u.y - y, d = Math.hypot(dx, dy);
+      if (d > r + u.radius) continue;
+      let da = Math.atan2(dy, dx) - ang;
+      while (da > Math.PI) da -= 2 * Math.PI;
+      while (da < -Math.PI) da += 2 * Math.PI;
+      if (Math.abs(da) <= half + Math.atan2(u.radius, Math.max(1, d))) A.hit(game, caster, ab, u, { x: x, y: y });
+    }
   };
 
   A.hitLine = function (game, caster, ab, x1, y1, x2, y2, width) {
@@ -151,8 +205,17 @@
     const d = Math.hypot(dx, dy);
     if (d < 1) { dx = Math.cos(c.facing); dy = Math.sin(c.facing); } else { dx /= d; dy /= d; }
     const color = ab.color;
+    // lanzar una habilidad rompe la invisibilidad (salvo la que la da, que se aplica después)
+    if (c.isStealthed()) c.buffs = c.buffs.filter(function (b) { return b.type !== 'stealth'; });
 
     switch (ab.cast) {
+      case 'cone': {
+        const ang = Math.atan2(dy, dx);
+        c.facing = ang;
+        A.hitCone(game, c, ab, c.x, c.y, ang, ab.range, ab.angle || 50);
+        game.pushFx({ type: 'cone', x: c.x, y: c.y, angle: ang, range: ab.range, spread: ab.angle || 50, color: color, life: 0.5, max: 0.5, def: c.def.id, slot: ab.slot, impact: true });
+        break;
+      }
       case 'skillshot':
         game.projectiles.push({
           id: ++game.seq, kind: 'skill', x: c.x, y: c.y, vx: dx * ab.speed, vy: dy * ab.speed,
@@ -204,9 +267,19 @@
         break;
       }
       case 'target': {
-        const t = game.findAbilityTarget(c, tx, ty, ab.range);
+        const t = game.findAbilityTarget(c, tx, ty, ab.range, ab.championsOnly);
         if (!t) return false;
         c.facing = Math.atan2(t.y - c.y, t.x - c.x);
+        if (ab.blinkToTarget) {
+          // aparece al lado del objetivo, del lado de donde venía
+          game.particles(c.x, c.y, color, 14, 400);
+          const dd = U.dist(c, t) || 1, back = t.radius + c.radius + 10;
+          let bx = t.x - (t.x - c.x) / dd * back, by = t.y - (t.y - c.y) / dd * back;
+          if (game.map.nav && game.map.nav.blocked(bx, by)) { const f = game.map.nav.nearestFree(bx, by); bx = f.x; by = f.y; }
+          game.pushFx({ type: 'beam', x1: c.x, y1: c.y, x2: bx, y2: by, width: 60, color: color, life: 0.25, max: 0.25 });
+          c.x = c.px = bx; c.y = c.py = by;
+          c.target = t; c.moveTarget = null;
+        }
         A.hit(game, c, ab, t, c);
         game.pushFx({ type: 'beam', x1: c.x, y1: c.y, x2: t.x, y2: t.y, width: 40, color: color, life: 0.2, max: 0.2, def: c.def.id, slot: ab.slot, impact: true });
         game.pushFx({ type: 'ring', x: t.x, y: t.y, r0: 20, r1: 150, color: color, life: 0.3, max: 0.3, def: c.def.id, slot: ab.slot, impact: true });
@@ -218,6 +291,7 @@
     }
 
     c.mana -= c.manaCost(slot);
+    if (ab.selfDamage) { c.hp = Math.max(1, c.hp - c.hp * ab.selfDamage); c.flash = 0.15; }
     c.cds[slot] = c.cooldown(slot);
     c.castAt = game.time; c.castSlot = slot; c.lastAttackAt = game.time;
     // Evento visual: animación de lanzamiento + efecto de firma del campeón

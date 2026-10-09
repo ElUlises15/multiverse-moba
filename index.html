@@ -10,6 +10,7 @@
   <!-- Pantalla de selección de campeón -->
   <div id="select-screen" class="screen">
     <header class="select-header">
+      <button id="menu-gear" class="gear-btn" title="Configuración">⚙</button>
       <h1>Browser <span>Multiverse</span> MOBA</h1>
       <p class="subtitle">MOBA 5 contra 5 en 3D, en el navegador · jugá solo contra bots o con amigos por internet</p>
     </header>
@@ -43,7 +44,8 @@
       <b>Subir habilidades:</b> botón <b>+</b> sobre Q/W/E/R o <b>Ctrl/Alt + Q W E R</b> (empezás con 1 punto; la R se aprende en los niveles 6, 11 y 16) ·
       <b>Q W E R</b>: mantener para ver el alcance, soltar para lanzar hacia el mouse (clic derecho cancela) · <b>C</b> (mantener): ver tu alcance de ataque ·
       <b>B</b>: volver a la base (8 s) · <b>P</b>: tienda · <b>Tab</b>: marcador · <b>Y</b>: fijar/soltar cámara ·
-      <b>Espacio</b>: centrar cámara · <b>S</b>: frenar · <b>Rueda</b>: zoom · <b>Esc</b>: pausa / menú<br>
+      <b>Espacio</b>: centrar cámara · <b>S</b>: frenar · <b>Rueda</b>: zoom · <b>G</b> + clic (o Alt + clic): señal para tu equipo · <b>Esc</b>: pausa / menú<br>
+      <b>⚙ Configuración</b> (arriba a la derecha, o Esc en partida): cambiá cualquier tecla, el modo de lanzamiento, la cámara, los gráficos, el volumen y los modos para daltonismo<br>
       <b>Mapa:</b> las paredes de la jungla se esquivan solas al hacer clic del otro lado · en los <b>arbustos</b> no te ven si el rival no tiene a nadie adentro ·
       al salir de tu base corrés +75% más rápido hasta entrar en combate
     </div>
@@ -74,6 +76,7 @@
         <span id="timer">00:00</span>
         <span class="team-score red" id="score-red">0</span>
       </div>
+      <button id="hud-gear" class="gear-btn" title="Configuración (teclas, cámara, audio, daltonismo…)">⚙</button>
       <div id="killfeed"></div>
       <div id="bottom-panel">
         <div id="portrait-wrap">
@@ -103,6 +106,7 @@
         <div class="panel">
           <h2 id="pause-title">Pausa</h2>
           <button id="resume-btn">Continuar</button>
+          <button id="pause-settings-btn">⚙ Configuración</button>
           <button id="quit-btn">Abandonar partida</button>
         </div>
       </div>
@@ -115,6 +119,9 @@
   <script src="vendor/peerjs.min.js"></script>
   <!-- Núcleo -->
   <script src="js/core.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="assets/music/tracks.js"></script>
+  <script src="js/audio.js"></script>
   <script src="js/art.js"></script>
   <!-- Campeones: un archivo de datos por campeón (ver README.md) -->
   <script src="js/champions/granito.js"></script>
@@ -127,6 +134,12 @@
   <script src="js/champions/bolt.js"></script>
   <script src="js/champions/sol.js"></script>
   <script src="js/champions/mora.js"></script>
+  <script src="js/champions/trex.js"></script>
+  <script src="js/champions/dragon.js"></script>
+  <script src="js/champions/zombie.js"></script>
+  <script src="js/champions/creeper.js"></script>
+  <script src="js/champions/enderman.js"></script>
+  <script src="js/champions/pikachu.js"></script>
   <!-- Arte 3D procedural (generado con Claude y Codex, revisado e integrado a mano) -->
   <script src="js/art/art_granito.js"></script>
   <script src="js/art/art_bastion.js"></script>
@@ -138,9 +151,16 @@
   <script src="js/art/art_bolt.js"></script>
   <script src="js/art/art_sol.js"></script>
   <script src="js/art/art_mora.js"></script>
+  <script src="js/art/art_trex.js"></script>
+  <script src="js/art/art_dragon.js"></script>
+  <script src="js/art/art_zombie.js"></script>
+  <script src="js/art/art_creeper.js"></script>
+  <script src="js/art/art_enderman.js"></script>
+  <script src="js/art/art_pikachu.js"></script>
   <script src="js/art/art_units.js"></script>
   <script src="js/art/art_props.js"></script>
   <script src="js/art/art_items.js"></script>
+  <script src="js/art/art_items2.js"></script>
   <!-- Motor (simulación: no depende del dibujo) -->
   <script src="js/items.js"></script>
   <script src="js/map.js"></script>

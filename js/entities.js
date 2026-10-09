@@ -35,11 +35,16 @@
     }
     /** Velocidad de ataque estilo LoL: base × (1 + bonificación), tope 2.5 ataques/s. */
     getAttackSpeed() { return Math.min(2.5, this.attackSpeed * (1 + this.bonusAS + this.buffSum('attackSpeed'))); }
-    getArmor() { return this.armor + this.buffSum('armor'); }
-    getMr() { return this.mr + this.buffSum('mr'); }
+    shredMult() { return 1 - Math.min(0.6, this.buffSum('armorShred')); }
+    getArmor() { return (this.armor + this.buffSum('armor')) * this.shredMult(); }
+    getMr() { return (this.mr + this.buffSum('mr')) * this.shredMult(); }
+    isStealthed() { return this.hasBuff('stealth'); }
+    sizeMult() { return 1 + this.buffMax('grow'); }
     getLifesteal() { return this.lifesteal + this.buffSum('lifesteal'); }
     shieldAmount() { return this.buffSum('shield'); }
     addBuff(b) {
+      // Tenacidad (Botas de Mercurio): los controles duran menos
+      if (this.tenacity && (b.type === 'stun' || b.type === 'slow' || b.type === 'fear') && b.duration) b.duration *= 1 - this.tenacity;
       b.remaining = b.duration || 0.01;
       if (b.type === 'stun' || b.type === 'slow') {
         for (const o of this.buffs) {
@@ -78,7 +83,7 @@
       this.ranks = [0, 0, 0, 0]; this.skillPoints = 1;
       this.kills = 0; this.deaths = 0; this.assists = 0; this.cs = 0;
       this.respawnTimer = 0; this.ai = null; this.lane = 'mid';
-      this.recalling = null; this.haste = 0;
+      this.recalling = null; this.haste = 0; this.passives = {}; this.undo = []; this.reviveReady = 0;
       this.ranged = def.ranged; this.projectileColor = def.accent;
       this.recalc(true);
     }
@@ -87,12 +92,15 @@
     recalc(full) {
       const s = this.def.stats, n = this.level, g = function (b, gr) { return M.growth(b, gr || 0, n); };
       const it = { hp: 0, mana: 0, ad: 0, ap: 0, apMult: 0, armor: 0, mr: 0, attackSpeed: 0, critChance: 0, critDamage: 0,
-        lifesteal: 0, haste: 0, moveSpeed: 0, manaRegen: 0, hpRegen: 0 };
+        lifesteal: 0, haste: 0, moveSpeed: 0, moveSpeedPct: 0, manaRegen: 0, hpRegen: 0 };
+      this.passives = {};
       for (const id of this.items) {
         const item = M.itemById[id];
         if (!item) continue;
         for (const k in item.stats) it[k] = (it[k] || 0) + item.stats[k];
+        if (item.passive) this.passives[item.passive.id] = true;   // las pasivas únicas no se acumulan
       }
+      this.tenacity = this.passives.tenacity ? 0.3 : 0;
       const oldMax = this.maxHp, oldMana = this.maxMana;
       this.maxHp = g(s.hp, s.hpPerLevel) + it.hp;
       this.maxMana = g(s.mana, s.manaPerLevel) + it.mana;
@@ -109,7 +117,7 @@
       this.critDamage = 1.75 + it.critDamage;
       this.lifesteal = it.lifesteal;
       this.haste = it.haste;
-      this.moveSpeed = s.moveSpeed + it.moveSpeed;
+      this.moveSpeed = (s.moveSpeed + it.moveSpeed) * (1 + it.moveSpeedPct);
       this.attackRange = s.attackRange;
       this.hpRegen = g(s.hpRegen, s.hpRegenPerLevel) + it.hpRegen;
       this.manaRegen = g(s.manaRegen, s.manaRegenPerLevel) + it.manaRegen;

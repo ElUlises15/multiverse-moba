@@ -30,10 +30,10 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
   // ---------- Selección ----------
   await page.goto(url);
   await page.waitForSelector('.champ-card');
-  check('10 campeones en la selección', (await page.$$eval('#select-layout .champ-card', (els) => els.length)) === 10);
+  check('16 campeones en la selección', (await page.$$eval('#select-layout .champ-card', (els) => els.length)) === 16);
   check('WebGL disponible (Three.js vendorizado cargado)', await page.evaluate(() => typeof THREE !== 'undefined' && MOBA.webglAvailable()));
   check('PeerJS vendorizado cargado', await page.evaluate(() => MOBA.Net.peerAvailable()));
-  check('arte de los 10 campeones registrado', await page.evaluate(() => MOBA.champions.every((c) => MOBA.Art.champions[c.id])));
+  check('arte de los 16 campeones registrado', await page.evaluate(() => MOBA.champions.every((c) => MOBA.Art.champions[c.id])));
   check('arte de unidades, props y objetos registrado', await page.evaluate(() =>
     ['minion_melee', 'minion_caster', 'minion_cannon', 'tower', 'nexus', 'golem', 'wolf'].every((k) => MOBA.Art.units[k]) &&
     ['tree', 'rock', 'grassTuft'].every((k) => MOBA.Art.props[k]) && MOBA.ITEMS.every((i) => MOBA.Art.items[i.id])));
@@ -307,6 +307,158 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
   await frames(page, 3);
   await shot('05-final.png');
   await page.close();
+
+  // ---------- Ronda 5: tienda con recetas, configuración, audio y campeones nuevos ----------
+  const p5 = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+  watch(p5, '[r5]');
+  await p5.goto(url);
+  await p5.waitForSelector('.champ-card');
+  await p5.evaluate(() => { localStorage.clear(); MOBA.Settings.load(); });
+  check('filtro de rol "Asesino" en la selección', await p5.evaluate(() => [...document.querySelectorAll('#role-filters button')].some((b) => /Asesino/.test(b.textContent))));
+  check('música: menú y partida apuntan a los archivos de assets/music', await p5.evaluate(() => /menu\.mp3$/.test(MOBA.Audio.tracks.menu.url) && /batalla\.mp3$/.test(MOBA.Audio.tracks.match.url)));
+  await p5.waitForTimeout(1500);
+  check('los archivos de música cargan (sin caer al respaldo)', await p5.evaluate(() => MOBA.Audio.tracks.menu.ready && !MOBA.Audio.tracks.menu.failed && MOBA.Audio.source('match') === 'archivo'));
+  const NEW = ['trex', 'dragon', 'zombie', 'creeper', 'enderman', 'pikachu'];
+  check('los 6 campeones nuevos tienen datos, arte, historia y frase', await p5.evaluate((ids) => ids.every((id) => MOBA.championById[id] && MOBA.Art.champions[id] && MOBA.Art.champions[id].lore && MOBA.Art.champions[id].quote), NEW));
+  await p5.click('#role-filters button[data-role="Asesino"]');
+  check('el filtro Asesino muestra a Creeper y Enderman', JSON.stringify(await p5.$$eval('#select-layout .champ-card', (els) => els.map((e) => e.dataset.id).sort())) === '["creeper","enderman"]');
+  await p5.click('#role-filters button[data-role="Todos"]');
+  await p5.click('#select-layout .champ-card[data-id="dragon"]');
+  await p5.waitForTimeout(1200);
+  await shot('08-seleccion-nuevos.png', p5);
+
+  // Recetas (regla de LoL)
+  const recipe = await p5.evaluate(() => ({
+    fromZero: MOBA.purchasePlan([], 'cuchilla').cost,
+    withParts: MOBA.purchasePlan(['espada', 'espada', 'rubi'], 'cuchilla').cost,
+    withMid: MOBA.purchasePlan(['martillo', 'botas'], 'cuchilla'),
+  }));
+  check('receta: legendario sin componentes cuesta el total', recipe.fromZero === 3000);
+  check('receta: los componentes que tenés se descuentan', recipe.withParts === 1900 && recipe.withMid.cost === 1950 && recipe.withMid.consume.join() === '0');
+  await p5.evaluate(() => MOBA.debug.start('trex'));
+  await p5.waitForFunction(() => MOBA.game && MOBA.debug.renderer, null, { timeout: 15000 });
+  const buy = await p5.evaluate(() => {
+    const g = MOBA.game, p = g.player, f = g.map.fountains[p.team];
+    p.x = f.x; p.y = f.y; p.items = ['espada', 'espada', 'rubi']; p.recalc(); p.gold = 1900;
+    const err = MOBA.debug.cmd({ t: 'buy', item: 'cuchilla' });
+    const after = { items: p.items.join(), gold: Math.round(p.gold) };
+    const undoErr = MOBA.debug.cmd({ t: 'undo' });
+    return { err, after, undoErr, undone: { items: p.items.join(), gold: Math.round(p.gold) } };
+  });
+  check('comprar el legendario consume los componentes y cobra solo la diferencia', !buy.err && buy.after.items === 'cuchilla' && buy.after.gold === 0);
+  check('deshacer devuelve componentes y oro', !buy.undoErr && buy.undone.items === 'espada,espada,rubi' && buy.undone.gold === 1900);
+  await p5.evaluate(() => { const p = MOBA.game.player; p.gold = 2400; p.items = ['espada', 'rubi', 'botas']; p.recalc(); MOBA.game.paused = true; });
+  await p5.click('#shop-btn');
+  await p5.waitForSelector('#shop .scard');
+  await p5.click('#shop .scard[data-sel="cuchilla"]');
+  await p5.waitForTimeout(300);
+  const tree = await p5.evaluate(() => ({ owned: document.querySelectorAll('#shop .tree .tnode.owned').length, price: (document.querySelector('#shop .dprice') || {}).textContent || '' }));
+  check('árbol de la tienda marca los componentes que ya tenés y el precio con descuento', tree.owned === 2 && /te sale 2250/.test(tree.price));
+  await frames(p5, 2);
+  await shot('09-tienda-arbol.png', p5);
+  await p5.click('#shop .close-btn');
+
+  // Bots compran siguiendo las rutas
+  const bots = await p5.evaluate(() => { const g = MOBA.game; g.paused = false; MOBA.debug.simulate(600); return g.champions.filter((c) => !c.human).map((c) => c.items.map((x) => ({ id: x, tier: MOBA.itemById[x].tier, boots: !!MOBA.itemById[x].boots }))); });
+  console.log('Objetos de bots (10 min):', bots.map((it) => it.map((x) => x.id).join('+')).join(' | '));
+  check('los bots compran por rutas (sin intermedios repetidos de más y con al menos un objeto armado)',
+    bots.every((it) => it.length > 0) && bots.some((it) => it.some((x) => x.tier >= 2)) && bots.every((it) => it.filter((x) => x.tier === 2 && !x.boots).length <= 2));
+
+  // Configuración: abrir, reasignar tecla, persistir, daltonismo, modo de lanzamiento
+  await p5.click('#hud-gear');
+  await p5.waitForSelector('#settings .keybtn');
+  check('el menú de configuración pausa la partida solo', await p5.evaluate(() => MOBA.game.paused === true));
+  await frames(p5, 2);
+  await shot('10-configuracion.png', p5);
+  await p5.click('#settings .keybtn[data-bind="recall"][data-i="0"]');
+  await p5.keyboard.press('KeyH');
+  check('reasignar: la nueva tecla queda guardada', await p5.evaluate(() => MOBA.Settings.get('keys').recall[0] === 'KeyH' && JSON.parse(localStorage.getItem('mvmoba-settings-v1')).keys.recall[0] === 'KeyH'));
+  await p5.click('#settings .set-done');
+  const rb = await p5.evaluate(() => { const g = MOBA.game, p = g.player; g.paused = false; p.recalling = null; p.lastCombat = -99; p.dead = false; return 1; });
+  await p5.mouse.move(800, 450);
+  await p5.keyboard.press('KeyB');
+  const recB = await p5.evaluate(() => !!MOBA.game.player.recalling);
+  await p5.keyboard.press('KeyH');
+  const recH = await p5.evaluate(() => !!MOBA.game.player.recalling);
+  check('reasignar: la tecla nueva funciona y la vieja ya no', !recB && recH);
+  await p5.evaluate(() => { MOBA.game.player.recalling = null; MOBA.Settings.set('castMode', 'quick'); const p = MOBA.game.player; while (p.level < 3) p.gainXp(MOBA.game, p.xpToNext() - p.xp); p.skillPoints++; p.learn(1); p.cds[1] = 0; p.mana = p.maxMana; p.buffs = []; });
+  await p5.keyboard.down('KeyW');
+  const quick = await p5.evaluate(() => MOBA.game.player.cds[1] > 0 && MOBA.debug.aiming == null);
+  await p5.keyboard.up('KeyW');
+  check('lanzamiento rápido: la habilidad sale al apretar la tecla', quick);
+  await p5.evaluate(() => MOBA.Settings.set('castMode', 'indicator'));
+  const cb = await p5.evaluate(() => {
+    MOBA.Settings.set('colorblind', 'deuteranopia');
+    const g = MOBA.game, r = MOBA.debug.renderer, enemy = g.champions.find((c) => c.team === 1);
+    MOBA.debug.simulate(0.05); r.draw(0.016);
+    const v = r.views.get(enemy.id);
+    const ring = '#' + v.ring.material.color.getHexString();
+    return { team1: MOBA.TEAM_COLORS[1], bar: r.barColor(enemy), ring, css: getComputedStyle(document.documentElement).getPropertyValue('--team1').trim() };
+  });
+  check('modo daltonismo cambia colores de equipo, barras, anillos y minimapa', cb.team1 === '#ff9a1f' && cb.bar === '#ff9a1f' && cb.ring === '#ff9a1f' && cb.css === '#ff9a1f');
+  await p5.evaluate(() => { MOBA.Settings.set('camPitch', 48); MOBA.Settings.set('teamShapes', true); });
+  check('la inclinación de cámara se aplica en vivo', await p5.evaluate(() => Math.abs(MOBA.debug.renderer.pitch - 48 * Math.PI / 180) < 1e-6));
+  await p5.reload();
+  await p5.waitForSelector('.champ-card');
+  check('la configuración persiste al recargar', await p5.evaluate(() => MOBA.Settings.get('camPitch') === 48 && MOBA.Settings.get('colorblind') === 'deuteranopia' && MOBA.Settings.get('keys').recall[0] === 'KeyH' && MOBA.TEAM_COLORS[1] === '#ff9a1f'));
+  await p5.click('#menu-gear');
+  check('configuración también desde el menú principal', await p5.evaluate(() => MOBA.SettingsUI.isOpen()));
+  await p5.keyboard.press('Escape');
+  await p5.evaluate(() => { MOBA.Settings.reset(); });
+
+  // Campeones nuevos: cargan, se dibujan y lanzan las 4 habilidades
+  const casts = await p5.evaluate((ids) => {
+    const out = {};
+    for (const id of ids) {
+      MOBA.debug.startWith([id, 'granito', 'lyra', 'bolt', 'sol', 'bastion', 'ignis', 'kaida', 'vex', 'mora']);
+      const g = MOBA.game, p = g.player, r = MOBA.debug.renderer;
+      while (p.level < 18) p.gainXp(g, p.xpToNext() - p.xp);
+      for (let k = 0; k < 18; k++) for (const s of [3, 0, 1, 2]) p.learn(s);
+      const e = g.champions.find((c) => c.team === 1);
+      const res = [];
+      for (let s = 0; s < 4; s++) {
+        p.x = p.px = 7000; p.y = p.py = 7000; e.x = e.px = 7250; e.y = e.py = 7000; e.dead = false; e.hp = e.maxHp;
+        p.buffs = []; p.mana = p.maxMana; p.cds = [0, 0, 0, 0]; p.hp = p.maxHp; p.knock = null;
+        const ok = MOBA.debug.cast(s, e.x, e.y);
+        MOBA.debug.simulate(0.6);
+        res.push(ok && p.cds[s] > 0);
+      }
+      r.draw(0.016);
+      const v = r.views.get(p.id);
+      out[id] = { casts: res, art: !!v && v.artId === 'champ:' + id && !v.broken && !r.artErrors['champ:' + id] && ![0, 1, 2, 3].some((k) => r.artErrors['fx:' + id + k]) };
+    }
+    return out;
+  }, NEW);
+  console.log('Campeones nuevos:', JSON.stringify(casts));
+  check('los 6 campeones nuevos cargan con su arte y lanzan Q/W/E/R', NEW.every((id) => casts[id].art && casts[id].casts.every(Boolean)));
+
+  // Captura: pelea con los campeones nuevos
+  await p5.evaluate(() => {
+    MOBA.debug.startWith(['dragon', 'trex', 'pikachu', 'zombie', 'sol', 'creeper', 'enderman', 'kaida', 'vex', 'mora']);
+    const g = MOBA.game, r = MOBA.debug.renderer;
+    const cx = 7000, cy = 7000;
+    const spots = [[-260, 60], [-120, -170], [-380, -120], [-150, 190], [-480, 120], [200, -60], [150, 140], [330, -170], [340, 120], [480, 0]];
+    g.champions.forEach((c, i) => {
+      const s = MOBA.MAP.nav.nearestFree(cx + spots[i][0], cy + spots[i][1]);
+      c.x = c.px = s.x; c.y = c.py = s.y; c.moveTarget = null;
+      while (c.level < 11) c.gainXp(g, c.xpToNext() - c.xp);
+      for (let k = 0; k < 12; k++) for (const sl of [3, 0, 1, 2]) c.learn(sl);
+      c.mana = c.maxMana;
+    });
+    const by = (id) => g.champions.find((c) => c.def.id === id);
+    const cast = (id, s, t) => { const c = by(id), tt = by(t); MOBA.Abilities.cast(g, c, s, tt.x, tt.y); };
+    MOBA.debug.simulate(1.3);   // que se vayan los anillos de "subiste de nivel"
+    g.champions.forEach((c) => { c.mana = c.maxMana; c.cds = [0, 0, 0, 0]; });
+    cast('pikachu', 0, 'enderman'); cast('zombie', 0, 'creeper'); cast('enderman', 1, 'trex');
+    MOBA.debug.simulate(0.3);
+    cast('dragon', 0, 'creeper'); cast('creeper', 2, 'zombie');
+    MOBA.debug.simulate(0.2);
+    r.camLocked = false; r.cam.x = cx; r.cam.y = cy + 80; r.userZoom = r.zoomTarget = 1.3; r.updateZoom();
+    g.paused = true;
+  });
+  await frames(p5, 3);
+  await shot('11-pelea-nuevos.png', p5);
+  await p5.close();
 
   // ---------- Multijugador ----------
   async function multiplayer(mode) {

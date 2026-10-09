@@ -2,12 +2,15 @@
 window.MOBA = window.MOBA || {};
 (function (M) {
   'use strict';
-  M.VERSION = '0.1.0';
+  M.VERSION = '0.5.0';
   M.champions = [];
   M.championById = {};
-  M.ROLES = ['Tanque', 'Luchador', 'Mago', 'Tirador', 'Soporte'];
-  M.ROLE_COLORS = { Tanque: '#8fa3c4', Luchador: '#e8823f', Mago: '#b07cff', Tirador: '#f2c14e', Soporte: '#4fd1a5' };
-  M.ROLE_LANES = { Tanque: 'top', Luchador: 'top', Mago: 'mid', Tirador: 'bot', Soporte: 'bot' };
+  M.ROLES = ['Tanque', 'Luchador', 'Asesino', 'Mago', 'Tirador', 'Soporte'];
+  // Roles que arman un equipo estándar (los bots completan estos); los Asesinos cubren el lugar de Luchador o Mago
+  M.TEAM_ROLES = ['Tanque', 'Luchador', 'Mago', 'Tirador', 'Soporte'];
+  M.ROLE_ALT = { Luchador: ['Asesino'], Mago: ['Asesino'] };
+  M.ROLE_COLORS = { Tanque: '#8fa3c4', Luchador: '#e8823f', Asesino: '#e0508f', Mago: '#b07cff', Tirador: '#f2c14e', Soporte: '#4fd1a5' };
+  M.ROLE_LANES = { Tanque: 'top', Luchador: 'top', Asesino: 'mid', Mago: 'mid', Tirador: 'bot', Soporte: 'bot' };
   M.LANE_NAMES = { top: 'superior', mid: 'central', bot: 'inferior' };
   M.TEAM_COLORS = ['#38a3ff', '#ff4a4a', '#d9b44a'];
   M.TEAM_NAMES = ['Azul', 'Rojo', 'Neutral'];
@@ -95,6 +98,7 @@ window.MOBA = window.MOBA || {};
   };
 
   /** Dibuja una forma básica centrada en (x, y). */
+  U.escapeHtml = function (t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   U.drawShape = function (ctx, shape, x, y, r, fill, stroke, lw, rot) {
     ctx.save();
     ctx.translate(x, y);

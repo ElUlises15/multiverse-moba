@@ -6,7 +6,6 @@
   const U = M.util;
   let T = null;
   const VIEW_WIDTH = 2300;          // ancho visible (en unidades del mundo) con zoom 1
-  const PITCH = 56 * Math.PI / 180; // ángulo de la cámara respecto del suelo
   const FOV = 30;
   const toHex = function (c) { try { return new T.Color(c).getHex(); } catch (e) { return 0xffffff; } };
   const SLOT_KEYS = ['Q', 'W', 'E', 'R'];
@@ -22,12 +21,21 @@
       this.cam = { x: 0, y: 0, zoom: 1 };
       this.userZoom = 1; this.camLocked = true; this.time = 0; this.clickMarker = null;
       this.hoverTarget = null; this.attackArmed = false; this.mouseWorld = null; this.aimPoint = null; this.aim = null; this.showRange = false;
-      this.low = !!opts.low;
-      this.gl = new T.WebGLRenderer({ canvas: canvas, antialias: !this.low, powerPreference: 'high-performance' });
-      this.gl.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.low ? 1 : 1.5));
+      this.forceLow = !!opts.low;
+      const ST = M.Settings;
+      this.quality = this.forceLow ? 'low' : ST.get('quality');
+      this.low = this.quality === 'low';
+      this.pitch = ST.get('camPitch') * Math.PI / 180;
+      this.userZoom = this.zoomTarget = ST.get('camZoom');
+      this.pings = []; this.fps = 60; this.fpsAcc = 0; this.fpsN = 0;
+      // al reusar el mismo canvas (nueva partida), se limpia el estado de "pixelStorei" que dejó la anterior
+      if (canvas.__usedGL) { try { const g0 = canvas.getContext('webgl2'); if (g0) { g0.pixelStorei(g0.UNPACK_FLIP_Y_WEBGL, false); g0.pixelStorei(g0.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); } } catch (e) { /* nada */ } }
+      canvas.__usedGL = true;
+      this.gl = new T.WebGLRenderer({ canvas: canvas, antialias: this.quality !== 'low', powerPreference: 'high-performance' });
+      this.gl.setPixelRatio(this.pixelRatio());
       this.gl.outputColorSpace = T.SRGBColorSpace;
       this.gl.toneMapping = T.ACESFilmicToneMapping; this.gl.toneMappingExposure = 1.05;
-      this.gl.shadowMap.enabled = !this.low; this.gl.shadowMap.type = T.PCFSoftShadowMap;
+      this.gl.shadowMap.enabled = this.shadowsOn(); this.gl.shadowMap.type = T.PCFSoftShadowMap;
       this.scene = new T.Scene();
       this.scene.background = new T.Color(0x0a1420);
       this.camera = new T.PerspectiveCamera(FOV, 1, 100, 40000);
@@ -39,14 +47,37 @@
       this.buildLights(); this.buildWorld(); this.buildIndicators();
       const p = world.player;
       if (p) { this.cam.x = p.x; this.cam.y = p.y; }
+      this.ghostMat = new T.MeshBasicMaterial({ color: 0xb8d8ff, transparent: true, opacity: 0.28, depthWrite: false });
+      this.settingsFn = (k) => this.applySettings(k);
+      ST.on(this.settingsFn);
     }
     setWorld(w) { this.game = w; }
+    pixelRatio() { const dpr = window.devicePixelRatio || 1; return this.quality === 'low' ? Math.min(dpr, 0.75) : this.quality === 'medium' ? 1 : Math.min(dpr, 1.5); }
+    shadowsOn() { return !this.forceLow && this.quality !== 'low' && !!M.Settings.get('shadows'); }
+    /** Aplica en vivo los cambios del menú de configuración. */
+    applySettings(k) {
+      if (this.disposed) return;
+      const ST = M.Settings;
+      if (k === 'camPitch' || k === '*') { this.pitch = ST.get('camPitch') * Math.PI / 180; this.updateZoom(); }
+      if (k === 'camZoom' || k === '*') { this.zoomTarget = ST.get('camZoom'); }
+      if (k === 'quality' || k === 'shadows' || k === '*') {
+        if (!this.forceLow) this.quality = ST.get('quality');
+        this.low = this.quality === 'low';
+        this.gl.setPixelRatio(this.pixelRatio());
+        const sh = this.shadowsOn();
+        if (sh !== this.gl.shadowMap.enabled) {
+          this.gl.shadowMap.enabled = sh; this.sun.castShadow = sh;
+          this.scene.traverse(function (o) { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) { m.needsUpdate = true; }); });
+        }
+        this.resize();
+      }
+    }
 
     // ================= Escena estática =================
     buildLights() {
       this.scene.add(new T.HemisphereLight(0xcfe3ff, 0x3d4a2a, 1.25));
       const sun = this.sun = new T.DirectionalLight(0xfff1d6, 2.1);
-      sun.castShadow = !this.low;
+      sun.castShadow = this.shadowsOn();
       sun.shadow.mapSize.set(2048, 2048);
       const sc = sun.shadow.camera; sc.left = -2400; sc.right = 2400; sc.top = 2400; sc.bottom = -2400; sc.near = 100; sc.far = 9000;
       sun.shadow.bias = -0.0008; sun.shadow.normalBias = 2;
@@ -290,8 +321,10 @@
         range: mk(ring, 0xff5050, 0.55), abRange: mk(ring, 0x78c8ff, 0.6), towerRange: mk(new T.RingGeometry(0.985, 1, 128), 0xff4040, 0.5),
         hover: mk(new T.RingGeometry(0.82, 1, 48), 0xff3030, 0.9, 7), rect: mk(new T.PlaneGeometry(1, 1), 0x78c8ff, 0.25), rectEdge: mk(new T.RingGeometry(0.97, 1, 4, 1, Math.PI / 4), 0x78c8ff, 0.7),
         circle: mk(new T.CircleGeometry(1, 48), 0x78c8ff, 0.22), circleEdge: mk(new T.RingGeometry(0.96, 1, 64), 0x78c8ff, 0.8),
-        click: mk(new T.RingGeometry(0.6, 1, 24), 0x6eff8c, 0.9, 8)
+        click: mk(new T.RingGeometry(0.6, 1, 24), 0x6eff8c, 0.9, 8),
+        cone: mk(new T.CircleGeometry(1, 24, -Math.PI * 50 / 360, Math.PI * 50 / 180), 0x78c8ff, 0.25)
       };
+      this.coneSpread = 50;
       this.arrows = [];
       const ag = new T.ConeGeometry(18, 46, 3);
       for (let i = 0; i < 4; i++) { const a = new T.Mesh(ag, new T.MeshBasicMaterial({ color: 0xff3b3b, transparent: true, opacity: 0.9, depthWrite: false })); a.visible = false; a.renderOrder = 8; this.scene.add(a); this.arrows.push(a); }
@@ -312,21 +345,21 @@
       this.viewWidth = VIEW_WIDTH / this.userZoom;
       this.cam.zoom = (this.W || 1280) / this.viewWidth;
       const visH = this.viewWidth / this.camera.aspect;
-      this.camDist = visH / (2 * Math.tan(FOV * Math.PI / 360)) * Math.sin(PITCH) * 1.0;
+      this.camDist = visH / (2 * Math.tan(FOV * Math.PI / 360)) * Math.sin(this.pitch) * 1.0;
       this.camera.updateProjectionMatrix();
     }
-    zoomBy(f) { this.userZoom = U.clamp(this.userZoom * f, 0.6, 1.5); this.updateZoom(); }
+    zoomBy(f) { this.zoomTarget = U.clamp(this.zoomTarget * f, 0.6, 1.5); }
     clampCam() {
       this.cam.x = U.clamp(this.cam.x, 600, M.MAP.width - 600);
       this.cam.y = U.clamp(this.cam.y, 800, M.MAP.height - 300);
     }
     placeCamera() {
-      const d = this.camDist / Math.sin(PITCH);
+      const d = this.camDist / Math.sin(this.pitch);
       let sx = 0, sy = 0;
       const shake = this.game.shake || 0;
       if (shake > 0) { sx = (Math.random() - 0.5) * shake * 6; sy = (Math.random() - 0.5) * shake * 6; }
       const tx = this.cam.x + sx, tz = this.cam.y + sy;
-      this.camera.position.set(tx, Math.sin(PITCH) * d, tz + Math.cos(PITCH) * d);
+      this.camera.position.set(tx, Math.sin(this.pitch) * d, tz + Math.cos(this.pitch) * d);
       this.camera.lookAt(tx, 0, tz);
       this.camera.updateMatrixWorld();
       this.sun.position.set(tx - 1600, 3800, tz + 900); this.sun.target.position.set(tx, 0, tz);
@@ -399,6 +432,8 @@
       return v;
     }
     releaseView(v) {
+      if (v.ghost) this.setGhost(v, false);
+      v.root.scale.set(1, 1, 1);
       this.scene.remove(v.root);
       v.root.remove(v.model.object);
       v.ring.geometry.dispose(); v.ring.material.dispose();
@@ -430,7 +465,15 @@
       else if (u.attackStart != null && now - u.attackStart >= 0 && now - u.attackStart < Math.min(u.attackPeriod || 1, 0.9)) {
         anim = 'attack'; progress = (now - u.attackStart) / Math.min(u.attackPeriod || 1, 0.9);
       } else if (Math.hypot(u.vx || 0, u.vy || 0) > 40) anim = 'walk';
-      if (anim !== v.anim) { v.anim = anim; v.animT = 0; }
+      if (anim !== v.anim) {
+        if (M.Audio && v.root.visible) {
+          if (anim === 'attack' && u.type === 'champion') M.Audio.sfxAt((u.attackRange || 0) > 250 ? 'ranged' : 'melee', u.x, u.y);
+          else if (anim === 'attack' && u.type === 'tower') M.Audio.sfxAt('tower', u.x, u.y);
+          else if (anim === 'cast') M.Audio.sfxAt('cast', u.x, u.y, { slot: slot });
+          else if (anim === 'dead' && u.type === 'champion') M.Audio.sfxAt('death', u.x, u.y);
+        }
+        v.anim = anim; v.animT = 0;
+      }
       return { anim: anim, t: v.animT, progress: U.clamp(progress, 0, 1), time: this.time, slot: slot, speed: Math.hypot(u.vx || 0, u.vy || 0), dt: this.dt,
         hpFrac: u.maxHp ? U.clamp(u.hp / u.maxHp, 0, 1) : 1, heat: u.heat || 0 };
     }
@@ -459,6 +502,17 @@
         v.animT += dt;
         const st = this.animOf(v, u, now);
         if (v.model.update && !v.broken) { try { v.model.update(st); } catch (e) { v.broken = true; console.warn('update de ' + v.artId + ' falló', e); } }
+        // sigilo: se ve como fantasma (solo lo ven sus aliados)
+        const ghost = !!(u.isStealthed && u.isStealthed());
+        if (ghost !== !!v.ghost) this.setGhost(v, ghost);
+        // tamaño (p. ej. Furia Jurásica) y "sacudón" al recibir daño
+        const size = u.sizeMult ? u.sizeMult() : 1;
+        v.size = v.size == null ? size : U.lerp(v.size, size, Math.min(1, dt * 6));
+        if (v.lastHp != null && u.hp < v.lastHp - 1 && !u.dead && !u.isStatic) v.hitT = 0.14;
+        v.lastHp = u.hp;
+        let sq = 0;
+        if (v.hitT > 0) { v.hitT -= dt; sq = Math.sin(Math.max(0, v.hitT) / 0.14 * Math.PI) * 0.07; }
+        v.root.scale.set(v.size * (1 + sq * 0.6), v.size * (1 - sq), v.size * (1 + sq * 0.6));
         v.ring.visible = !u.dead;
         const hov = this.hoverTarget === u;
         v.ring.material.opacity = hov ? 1 : (u.type === 'champion' ? 0.85 : 0.5);
@@ -474,6 +528,16 @@
         try { v.model.update && v.model.update({ anim: 'dead', t: v.animT, progress: 1, time: this.time, slot: 0, speed: 0, dt: dt, hpFrac: 0, heat: 0 }); } catch (e) { /* nada */ }
         v.root.position.y = -v.gone * 60; v.ring.visible = false;
       }
+    }
+
+    setGhost(v, on) {
+      v.ghost = on;
+      const gm = this.ghostMat;
+      v.model.object.traverse(function (o) {
+        if (!o.isMesh && !o.isPoints) return;
+        if (on) { o.userData.realMat = o.material; o.material = gm; }
+        else if (o.userData.realMat) { o.material = o.userData.realMat; delete o.userData.realMat; }
+      });
     }
 
     // ================= Efectos =================
@@ -492,6 +556,15 @@
       m.rotation.x = -Math.PI / 2;
       const g = new T.Group(); g.add(m);
       return { object: g, update: function (p) { const r = r0 + (r1 - r0) * Math.min(1, p * 1.6); m.scale.set(r, r, r); mat.opacity = (1 - p) * (fill ? 0.35 : 0.9); } };
+    }
+    /** Cono plano que apunta hacia +Z. */
+    genericCone(color, range, spreadDeg) {
+      const half = spreadDeg * Math.PI / 360;
+      const mat = new T.MeshBasicMaterial({ color: toHex(color || '#ff8040'), transparent: true, opacity: 0.6, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending });
+      const m = new T.Mesh(new T.CircleGeometry(1, 24, -Math.PI / 2 - half, half * 2), mat);
+      m.rotation.x = -Math.PI / 2; m.position.y = 8;
+      const g = new T.Group(); g.add(m);
+      return { object: g, update: function (p) { const r = range * Math.min(1, 0.3 + p * 2.2); m.scale.set(r, r, r); mat.opacity = 0.6 * (1 - p); } };
     }
     genericBeam(color, len, width) {
       const mat = new T.MeshBasicMaterial({ color: toHex(color || '#ffffff'), transparent: true, opacity: 0.8, depthWrite: false, blending: T.AdditiveBlending });
@@ -539,11 +612,22 @@
           let e = null;
           if (f.def) e = this.makeFx(f.def, f.slot, { kind: f.ally ? 'self' : 'burst', radius: f.r1, width: 0, length: 0, duration: f.max, slot: f.slot, team: team });
           this.addFx(e || this.genericRing(f.color, f.r0, f.r1, f.fill), f.x, f.y, null, (f.max || 0.5) + (e ? 0.25 : 0));
+          if (M.Audio && f.def && !f.ally && f.r1 >= 280) M.Audio.sfxAt('boom', f.x, f.y);
         } else if (f.type === 'beam') {
           const len = Math.hypot(f.x2 - f.x1, f.y2 - f.y1);
           let e = null;
           if (f.def) e = this.makeFx(f.def, f.slot, { kind: 'line', radius: f.width / 2, width: f.width, length: len, duration: f.max, slot: f.slot });
           this.addFx(e || this.genericBeam(f.color, len, f.width), f.x1, f.y1, this.dirRot(f.x2 - f.x1, f.y2 - f.y1), (f.max || 0.3) + (e ? 0.25 : 0));
+        } else if (f.type === 'cone') {
+          const e = this.makeFx(f.def, f.slot, { kind: 'cone', radius: f.range, width: 0, length: f.range, angle: f.spread, duration: f.max || 0.5, slot: f.slot, team: team });
+          this.addFx(e || this.genericCone(f.color, f.range, f.spread), f.x, f.y, this.dirRot(Math.cos(f.angle), Math.sin(f.angle)), (f.max || 0.5) + (e ? 0.25 : 0));
+        } else if (f.type === 'ping') {
+          const me = w.player;
+          if (me && f.team === me.team) {
+            this.pings.push({ x: f.x, y: f.y, kind: f.kind || 'go', t: 0, who: f.name || '' });
+            if (this.pings.length > 8) this.pings.shift();
+            if (M.Audio) M.Audio.sfx(f.kind === 'danger' ? 'danger' : 'ping');
+          }
         } else if (f.type === 'swing') {
           this.addFx(this.genericRing(f.color, f.r * 0.6, f.r, false), f.x, f.y, null, 0.18);
         } else if (f.type === 'cast') {
@@ -686,7 +770,7 @@
         const ab = p.def.abilities[this.aim];
         const ready = p.abilityReady(this.aim);
         const col = ready ? 0x78c8ff : 0xff5a5a;
-        [ind.abRange, ind.rect, ind.rectEdge, ind.circle, ind.circleEdge].forEach(function (m) { m.material.color.setHex(col); });
+        [ind.abRange, ind.rect, ind.rectEdge, ind.circle, ind.circleEdge, ind.cone].forEach(function (m) { m.material.color.setHex(col); });
         const m = this.aimPoint || this.mouseWorld;
         let dx = m.x - p.x, dy = m.y - p.y; const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
         const range = ab.range || ab.radius || ab.allyRadius || 0;
@@ -695,6 +779,11 @@
           const wdt = ab.width || 100;
           ind.rect.visible = true; ind.rect.position.set(p.x + dx * ab.range / 2, 5, p.y + dy * ab.range / 2);
           ind.rect.rotation.set(-Math.PI / 2, 0, -Math.atan2(dy, dx)); ind.rect.scale.set(ab.range, wdt, 1);
+        } else if (ab.cast === 'cone') {
+          const sp = ab.angle || 50;
+          if (sp !== this.coneSpread) { ind.cone.geometry.dispose(); ind.cone.geometry = new T.CircleGeometry(1, 24, -Math.PI * sp / 360, Math.PI * sp / 180); this.coneSpread = sp; }
+          ind.cone.visible = true; ind.cone.position.set(p.x, 5, p.y);
+          ind.cone.rotation.set(-Math.PI / 2, 0, -Math.atan2(dy, dx)); ind.cone.scale.set(ab.range, ab.range, 1);
         } else if (ab.cast === 'area' || ab.cast === 'dash') {
           const r = Math.min(d, ab.range);
           const x = p.x + dx * r, y = p.y + dy * r, rr = ab.radius || 80;
@@ -716,6 +805,12 @@
     // ================= Cuadro =================
     draw(dt) {
       this.dt = dt; this.time += dt;
+      if (Math.abs(this.userZoom - this.zoomTarget) > 0.001) { this.userZoom = U.lerp(this.userZoom, this.zoomTarget, Math.min(1, dt * 12)); this.updateZoom(); }
+      this.fpsAcc += dt; this.fpsN++;
+      if (this.fpsAcc >= 0.5) { this.fps = this.fpsN / this.fpsAcc; this.fpsAcc = 0; this.fpsN = 0; }
+      if (M.Audio) M.Audio.listener = this.cam;
+      for (const pg of this.pings) pg.t += dt;
+      this.pings = this.pings.filter(function (pg) { return pg.t < 3; });
       this.placeCamera();
       this.syncUnits(dt);
       this.processFx();
@@ -732,16 +827,37 @@
     // ================= Capa 2D (barras, nombres, textos) =================
     barColor(u) {
       const me = this.game.player;
+      const bc = M.BAR_COLORS || { me: '#5ce06b', ally: '#3fa0ff', enemy: '#ff4f4f' };
       if (u.team === 2) return '#e0b44a';
-      if (u === me) return '#5ce06b';
-      return me && u.team === me.team ? '#3fa0ff' : '#ff4f4f';
+      if (u === me) return bc.me;
+      return me && u.team === me.team ? bc.ally : bc.enemy;
     }
     screenBar(ctx, x, y, w, h, pct, color) {
       ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, h + 2);
       ctx.fillStyle = color; ctx.fillRect(x - w / 2, y, w * U.clamp(pct, 0, 1), h);
     }
+    /** Barra de súbdito/monstruo, con indicador de último golpe (cuánto le saca tu ataque básico). */
+    drawSmallBar(ctx, u, s) {
+      const bw = u.type === 'monster' ? 56 : (u.kind === 'cannon' ? 38 : 30), pct = U.clamp(u.hp / u.maxHp, 0, 1);
+      const me = this.game.player;
+      let lethal = false, dmgPct = 0;
+      if (me && !me.dead && u.team !== me.team && M.Settings.get('lastHit') && u.type === 'minion') {
+        const armor = u.getArmor ? u.getArmor() : (u.armor || 0);
+        const dmg = (me.ad || 0) * 100 / (100 + Math.max(0, armor));
+        dmgPct = U.clamp(dmg / u.maxHp, 0, 1);
+        lethal = u.hp <= dmg;
+      }
+      ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(s.x - bw / 2 - 1, s.y - 1, bw + 2, 6);
+      ctx.fillStyle = lethal ? '#ffffff' : this.barColor(u); ctx.fillRect(s.x - bw / 2, s.y, bw * pct, 4);
+      if (dmgPct > 0 && !lethal) { ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(s.x - bw / 2 + bw * Math.min(pct, dmgPct) - 1, s.y - 1, 2, 6); }
+      if (lethal) { ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 1.5; ctx.strokeRect(s.x - bw / 2 - 2, s.y - 2, bw + 4, 8); }
+      if (M.Settings.get('teamShapes') && u.type === 'minion' && me && u.team !== 2) this.teamGlyph(ctx, s.x - bw / 2 - 7, s.y + 2, u.team === me.team, 3.5);
+    }
+    teamGlyph(ctx, x, y, ally, r) {
+      U.drawShape(ctx, ally ? 'circle' : 'triangle', x, y, r, ally ? (M.BAR_COLORS || {}).ally : (M.BAR_COLORS || {}).enemy, '#000', 1);
+    }
     drawOverlay() {
-      const ctx = this.octx, w = this.game;
+      const ctx = this.octx, w = this.game, ST = M.Settings;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, this.W, this.H);
       for (const [, v] of this.views) {
@@ -752,7 +868,7 @@
         if (u.type === 'champion') this.drawChampionBar(ctx, u, s);
         else if (u.type === 'tower') this.screenBar(ctx, s.x, s.y - 6, 74, 7, u.hp / u.maxHp, this.barColor(u));
         else if (u.type === 'nexus') this.screenBar(ctx, s.x, s.y - 6, 110, 9, u.hp / u.maxHp, this.barColor(u));
-        else if (u.hp < u.maxHp) this.screenBar(ctx, s.x, s.y, u.type === 'monster' ? 56 : (u.kind === 'cannon' ? 38 : 30), 4, u.hp / u.maxHp, this.barColor(u));
+        else if (u.hp < u.maxHp || (ST.get('minionBars') === 'always' && u.type === 'minion')) this.drawSmallBar(ctx, u, s);
         if ((u.type === 'tower' || u.type === 'nexus') && u.vulnerable === false) {
           ctx.fillStyle = 'rgba(200,220,255,0.85)'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('INVULNERABLE', s.x, s.y - 12);
         }
@@ -769,44 +885,67 @@
       }
       // textos flotantes
       ctx.textAlign = 'center';
+      const nums = ST.get('damageNumbers');
       for (const t of w.texts) {
+        if (!nums && /^\d+!?$/.test(t.text)) continue;
         const s = this.worldToScreen(t.x, t.y, 160);
+        const age = 1 - t.life / t.max, pop = age < 0.12 ? 1 + (0.12 - age) * 4 : 1;
         if (s.x < -50 || s.y < -50 || s.x > this.W + 50 || s.y > this.H + 50) continue;
-        ctx.font = t.big ? 'bold 21px sans-serif' : 'bold 16px sans-serif';
+        const crit = t.text.slice(-1) === '!';
+        ctx.font = 'bold ' + Math.round((t.big ? 21 : crit ? 20 : 16) * pop) + 'px sans-serif';
         ctx.globalAlpha = U.clamp(t.life / t.max * 1.5, 0, 1);
         ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillText(t.text, s.x + 1.5, s.y + 1.5);
         ctx.fillStyle = t.color; ctx.fillText(t.text, s.x, s.y);
       }
       ctx.globalAlpha = 1;
+      // señales (pings)
+      for (const pg of this.pings) {
+        const s = this.worldToScreen(pg.x, pg.y, 0), a = U.clamp(3 - pg.t, 0, 1), danger = pg.kind === 'danger';
+        const col = danger ? '255,80,80' : '90,200,255';
+        ctx.strokeStyle = 'rgba(' + col + ',' + a + ')'; ctx.lineWidth = 3;
+        const rr = 18 + (pg.t % 0.8) * 50;
+        ctx.beginPath(); ctx.ellipse(s.x, s.y, rr, rr * 0.55, 0, 0, 6.283); ctx.stroke();
+        ctx.globalAlpha = a; ctx.font = 'bold 30px sans-serif'; ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillText(danger ? '⚠' : '!', s.x + 2, s.y - 22);
+        ctx.fillStyle = 'rgb(' + col + ')'; ctx.fillText(danger ? '⚠' : '!', s.x, s.y - 24);
+        if (pg.who) { ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(pg.who, s.x, s.y + 22); }
+        ctx.globalAlpha = 1;
+      }
     }
     drawChampionBar(ctx, c, s) {
+      const ST = M.Settings, me = this.game.player;
       const x = s.x, y = s.y - 8, w = 78;
       ctx.fillStyle = 'rgba(0,0,0,0.78)'; ctx.fillRect(x - w / 2 - 2, y - 2, w + 4, 15);
       const hpPct = U.clamp(c.hp / c.maxHp, 0, 1);
       ctx.fillStyle = this.barColor(c); ctx.fillRect(x - w / 2, y, w * hpPct, 7);
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      for (let v = 100; v < c.maxHp; v += 100) ctx.fillRect(x - w / 2 + w * v / c.maxHp, y, 1, v % 1000 === 0 ? 7 : 4);
+      if (ST.get('hpTicks')) for (let v = 100; v < c.maxHp; v += 100) ctx.fillRect(x - w / 2 + w * v / c.maxHp, y, 1, v % 1000 === 0 ? 7 : 4);
       const sh = c.shieldAmount();
       if (sh > 0) { ctx.fillStyle = '#e8e8e8'; ctx.fillRect(x - w / 2 + w * hpPct, y, Math.min(w * (1 - hpPct), w * sh / c.maxHp), 7); }
       ctx.fillStyle = '#4a7dff'; ctx.fillRect(x - w / 2, y + 8, w * (c.maxMana ? U.clamp(c.mana / c.maxMana, 0, 1) : 0), 3);
       ctx.fillStyle = '#111'; ctx.fillRect(x - w / 2 - 20, y - 2, 18, 15);
       ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(c.level, x - w / 2 - 11, y + 10);
-      const label = c.playerName ? c.name + ' · ' + c.playerName : c.name;
-      ctx.font = 'bold 12px sans-serif';
-      ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillText(label, x + 1, y - 5);
-      ctx.fillStyle = c === this.game.player ? '#ffe45a' : (c.human ? '#bfe6ff' : '#fff'); ctx.fillText(label, x, y - 6);
+      if (ST.get('showNames')) {
+        const label = c.playerName ? c.name + ' · ' + c.playerName : c.name;
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillText(label, x + 1, y - 5);
+        ctx.fillStyle = c === me ? '#ffe45a' : (c.human ? '#bfe6ff' : '#fff'); ctx.fillText(label, x, y - 6);
+      }
+      if (ST.get('teamShapes') && me && c !== me) this.teamGlyph(ctx, x + w / 2 + 9, y + 5, c.team === me.team, 6);
+      if (c.isStealthed && c.isStealthed()) { ctx.fillStyle = '#c9b8ff'; ctx.font = 'bold 11px sans-serif'; ctx.fillText('SIGILO', x, y + 24); }
       if (c.recalling) {
         const pct = 1 - c.recalling.t / (c.recalling.max || 8);
         ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(x - w / 2, y + 14, w, 5);
         ctx.fillStyle = '#9fe0ff'; ctx.fillRect(x - w / 2, y + 14, w * pct, 5);
       }
-      if (c.isStunned()) { ctx.fillStyle = '#ffe14d'; ctx.font = 'bold 13px sans-serif'; ctx.fillText('✦ ✦ ✦', x, y - 20); }
+      const feared = c.feared || (c.buffs && c.buffs.some(function (b) { return b.fear; }));
+      if (feared) { ctx.fillStyle = '#c77dff'; ctx.font = 'bold 13px sans-serif'; ctx.fillText('¡MIEDO!', x, y - 20); }
+      else if (c.isStunned()) { ctx.fillStyle = '#ffe14d'; ctx.font = 'bold 13px sans-serif'; ctx.fillText('✦ ✦ ✦', x, y - 20); }
     }
 
     // ================= Minimapa =================
     drawMinimap(mctx, size) {
-      const g = this.game, map = M.MAP, s = size / map.width, me = g.player, myTeam = me ? me.team : 0;
+      const g = this.game, map = M.MAP, s = size / map.width, me = g.player, myTeam = me ? me.team : 0, shapes = M.Settings.get('teamShapes');
       mctx.setTransform(1, 0, 0, 1, 0, 0);
       if (this.groundCanvas) mctx.drawImage(this.groundCanvas, 0, 0, size, size);
       else { mctx.fillStyle = '#1b3424'; mctx.fillRect(0, 0, size, size); }
@@ -821,15 +960,21 @@
       for (const u of g.units) {
         if (u.dead && u.type !== 'tower' && u.type !== 'nexus') continue;
         if (u.hiddenLocal || (g.isVisibleTo && !g.isVisibleTo(myTeam, u))) continue;
-        const x = u.x * s, y = u.y * s, tc = M.TEAM_COLORS[u.team];
-        if (u.type === 'tower') { mctx.fillStyle = u.dead ? '#555' : tc; mctx.fillRect(x - 4, y - 4, 8, 8); mctx.strokeStyle = '#000'; mctx.lineWidth = 1; mctx.strokeRect(x - 4, y - 4, 8, 8); }
+        const x = u.x * s, y = u.y * s, tc = M.TEAM_COLORS[u.team], enemyShape = shapes && u.team !== myTeam;
+        if (u.type === 'tower' && enemyShape) U.drawShape(mctx, 'triangle', x, y, 6, u.dead ? '#555' : tc, '#000', 1);
+        else if (u.type === 'tower') { mctx.fillStyle = u.dead ? '#555' : tc; mctx.fillRect(x - 4, y - 4, 8, 8); mctx.strokeStyle = '#000'; mctx.lineWidth = 1; mctx.strokeRect(x - 4, y - 4, 8, 8); }
         else if (u.type === 'nexus') U.drawShape(mctx, 'diamond', x, y, 8, u.dead ? '#555' : tc, '#fff', 1.5);
+        else if (u.type === 'minion' && enemyShape) U.drawShape(mctx, 'triangle', x, y, 2.6, tc, null);
         else if (u.type === 'minion') { mctx.fillStyle = tc; mctx.fillRect(x - 1.5, y - 1.5, 3, 3); }
       }
       for (const t of g.towers || []) if (t.dead) { mctx.fillStyle = '#555'; mctx.fillRect(t.x * s - 3, t.y * s - 3, 6, 6); }
       for (const c of g.champions) {
         if (c.dead || c.hiddenLocal || (g.isVisibleTo && !g.isVisibleTo(myTeam, c))) continue;
-        U.drawShape(mctx, 'circle', c.x * s, c.y * s, c === me ? 7 : 5.5, c.def.color, c === me ? '#ffe45a' : M.TEAM_COLORS[c.team], 2.5);
+        U.drawShape(mctx, shapes && c.team !== myTeam ? 'triangle' : 'circle', c.x * s, c.y * s, c === me ? 7 : (shapes && c.team !== myTeam ? 7 : 5.5), c.def.color, c === me ? '#ffe45a' : M.TEAM_COLORS[c.team], 2.5);
+      }
+      for (const pg of this.pings) {
+        mctx.strokeStyle = pg.kind === 'danger' ? '#ff5050' : '#5ac8ff'; mctx.lineWidth = 2;
+        mctx.beginPath(); mctx.arc(pg.x * s, pg.y * s, 4 + (pg.t % 0.8) * 12, 0, 6.283); mctx.stroke();
       }
       // trapecio de lo que ve la cámara
       if (this.W) {
@@ -839,6 +984,9 @@
       }
     }
     dispose() {
+      this.disposed = true;
+      const fn = this.settingsFn;
+      M.Settings.listeners = M.Settings.listeners.filter(function (f) { return f !== fn; });
       try { this.gl.dispose(); this.gl.forceContextLoss(); } catch (e) { /* nada */ }
     }
   }

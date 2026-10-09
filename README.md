@@ -10,8 +10,15 @@ Las dos librerías están copiadas dentro del proyecto (`vendor/`), así que el 
 
 - **Opción 0 (la más fácil):** entrá a https://elulises15.github.io/multiverse-moba/ desde el navegador.
 - **Opción 1:** abrí `index.html` con doble clic.
-- **Opción 2 (un solo archivo):** abrí `dist/multiverse-moba.html`. Tiene todo adentro, incluso Three.js y PeerJS (pesa ~1,3 MB), así que lo podés mandar como adjunto.
+- **Opción 2 (un solo archivo):** abrí `dist/multiverse-moba.html`. Tiene todo adentro, incluso Three.js y PeerJS (pesa ~1,6 MB), así que lo podés mandar como adjunto. La música no va adentro (pesa varios MB): el archivo la busca en `../assets/music/`, y si no la encuentra usa la música que genera el juego.
 - Necesitás un navegador con **WebGL** (cualquier Chrome, Edge, Firefox o Safari actual). Si la compu es lenta, abrí `index.html?low=1` (sin sombras ni antialias).
+
+### Novedades de la versión 0.5
+- **Tienda estilo LoL con recetas:** los objetos básicos se combinan en intermedios y legendarios. Si ya tenés componentes, se usan y pagás solo la diferencia. La tienda muestra el árbol de construcción (lo que ya tenés en verde), recomendados por rol, y tiene **Deshacer** y venta.
+- **Seis campeones nuevos:** T-Rex, Dragón, Zombie, Creeper, Enderman y Pikachu, más el rol **Asesino**.
+- **Música y sonido:** banda sonora hecha con Suno AI por Ulises (tema de menú y tema de batalla) y efectos de sonido.
+- **Menú de configuración** (⚙ o Esc): cambiás cualquier tecla, modo de lanzamiento, modos para daltonismo, colores de equipo, cámara, gráficos, interfaz y volumen.
+- **Pulido:** indicador de último golpe en los súbditos, números de daño que "saltan", sacudón al recibir golpes, zoom suave, señales (pings) para tu equipo, tooltips con el valor de cada rango resaltado y bots que compran siguiendo las rutas.
 
 En la pantalla de inicio tenés tres pestañas:
 
@@ -62,11 +69,33 @@ Cómo funciona por dentro:
 | S | Frenar |
 | Rueda del mouse | Zoom |
 | Clic izquierdo en el minimapa | Mover la cámara · Clic derecho: mandar a tu campeón ahí |
-| Esc | Pausa (solo jugando solo) / menú en partidas online |
+| G + clic izquierdo (o Alt + clic) | Señal "¡vamos!" para tu equipo (G + clic derecho o Ctrl: "¡peligro!"). También sobre el minimapa |
+| Esc | Pausa (solo jugando solo) / menú en partidas online. Desde ahí, o con el botón ⚙, abrís la **Configuración** |
+
+**Todas estas teclas se pueden cambiar** en ⚙ Configuración → Controles (cada acción tiene una tecla principal y una alternativa).
 
 > Ojo: Chrome no deja que una página use **Ctrl+W** (cierra la pestaña). Para subir la W usá **Alt+W** o el botón **+**.
 
 **Ataque automático:** cuando estás quieto o llegás a donde hiciste clic, tu campeón ataca solo al enemigo más cercano que tenga en rango (primero campeones, después súbditos; nunca empieza solo con torres ni monstruos). Si elegiste un objetivo a mano, lo persigue hasta una distancia razonable.
+
+### Configuración (⚙)
+Se abre con el botón ⚙ (arriba en el menú y en la partida) o con Esc → Configuración. Todo se aplica en el momento y se guarda en el navegador (localStorage).
+
+| Pestaña | Opciones |
+|---|---|
+| Controles | Cambiar la tecla de cada acción: Q, W, E, R, subir Q/W/E/R, atacar-mover, frenar, volver a la base, tienda, fijar cámara, centrar cámara, marcador, ver alcance y señal. **Modo de lanzamiento:** rápido (sale al apretar), rápido con indicador (sale al soltar; el de siempre) o normal (apretás y confirmás con clic izquierdo) |
+| Juego | Números de daño, barras de vida de súbditos (solo dañados o siempre), indicador de último golpe, marcas cada 100 de vida, nombres sobre los campeones, mostrar FPS |
+| Cámara | Zoom inicial, inclinación, velocidad de paneo por los bordes (o apagado), suavidad del seguimiento, cámara fija al empezar |
+| Gráficos | Calidad baja / media / alta (resolución interna), sombras sí/no, tamaño de la interfaz (75–150 %) |
+| Audio | Volumen general, música, efectos y silenciar todo |
+| Accesibilidad | Modos para **protanopía, deuteranopía y tritanopía** (cambian colores de equipo, aros, barras de vida y minimapa), **formas por equipo** (aliados con círculo y enemigos con triángulo en barras y minimapa) y colores de equipo a elección |
+
+### Música y sonido
+- **Música:** *menu.mp3* (pantalla de inicio y sala) y *batalla.mp3* (durante la partida), **generadas con Suno AI por Ulises**. Están en `assets/music/`, recodificadas a 112 kbps (unos 2,5 MB cada una), y al terminar vuelven a empezar con un fundido de 3 s.
+- **Cambiar la música:** poné tus archivos (.mp3 u .ogg) en `assets/music/` y escribí sus nombres en `assets/music/tracks.js`.
+- **Respaldo:** si un archivo no carga, el juego genera una música provisoria con WebAudio (`js/audio.js`), así nunca queda en silencio.
+- **Efectos:** ataques cuerpo a cuerpo y a distancia, habilidades, explosiones, torres, subir de nivel, comprar/vender, muertes y señales. Se sintetizan en el momento, sin archivos, y bajan de volumen con la distancia a la cámara.
+- Los navegadores no dejan reproducir audio hasta el primer clic o tecla, así que la música arranca ahí.
 
 ### Subir habilidades (como en LoL)
 - Arrancás en nivel 1 con **1 punto** y todas las habilidades bloqueadas (se ven grises). Una habilidad sin aprender no se puede lanzar.
@@ -74,6 +103,31 @@ Cómo funciona por dentro:
 - Q, W y E llegan a rango 5, pero nunca pueden pasar de ⌈nivel/2⌉.
 - La R tiene 3 rangos y se aprende en los niveles **6, 11 y 16**.
 - Daño, enfriamiento y maná de cada habilidad cambian según el rango (el tooltip muestra los valores de cada rango).
+
+## Campeones
+
+| Campeón | Rol | En una línea |
+|---|---|---|
+| Granito | Tanque | Gólem de piedra: aguanta, aturde y protege |
+| Bastión | Tanque | Escudo del Alba: escudos y control para el equipo |
+| Rorik | Luchador | Hacha del Norte: daño sostenido cuerpo a cuerpo |
+| Kaida | Luchador | Hoja Carmesí: entra, corta y sale |
+| Ignis | Mago | Hechicero de Brasas: daño de área a distancia |
+| Lyra | Mago | Tejedora de Escarcha: ralentiza y congela |
+| Vex | Tirador | Arquera Errante: daño a distancia y movilidad |
+| Bolt | Tirador | Artillero Mecánico: torreta andante |
+| Sol | Soporte | Sacerdotisa Radiante: cura y escudos |
+| Mora | Soporte | Chamana del Bosque: raíces y curación |
+| **T-Rex** | Luchador | Q muerde (más daño a los que tienen poca vida y se cura), W ruge y da miedo, E embiste empujando, R se agranda y gana velocidad de ataque y robo de vida |
+| **Dragón** | Mago | Q aliento de fuego en cono (quema), W vuela a otro lado, E escamas que dan escudo y queman cerca, R lluvia de meteoros que aturde |
+| **Zombie** | Tanque | Pasiva: revive una vez cada 150 s. Q agarre que atrae y aturde, W no-muerto (no puede morir unos segundos y se cura), E infección alrededor, R la horda: zona que ralentiza y aturde |
+| **Creeper** | Asesino | Pasiva: reaparece más rápido. Q sigilo, W explota cerca (le cuesta vida), E salto de pólvora, R se carga y hace una explosión enorme |
+| **Enderman** | Asesino | Q se teletransporta, W tira un bloque que ralentiza, E mirada que baja la armadura y aturde, R roba del vacío: aparece sobre un campeón y lo remata |
+| **Pikachu** | Tirador | Pasiva: cada 4.º ataque electrocuta y ralentiza. Q impactrueno que atraviesa, W ataque rápido, E bola voltio, R trueno que aturde |
+
+Los valores de cada rango se ven en la selección y en el tooltip de cada habilidad durante la partida (el rango actual aparece resaltado).
+
+> T-Rex, Dragón y Zombie son genéricos. **Creeper y Enderman (Minecraft) y Pikachu (Pokémon) son personajes con marca registrada de terceros**, incluidos como homenaje en un proyecto de fans sin fines de lucro. Si el proyecto se publica en serio, conviene cambiarlos por diseños propios.
 
 ## Gráficos 3D
 
@@ -100,9 +154,16 @@ Ulises pidió que el arte lo hicieran **Claude** y **Codex** (las dos herramient
 | `js/art/art_bolt.js` | Bolt, el Artillero Mecánico | Codex |
 | `js/art/art_mora.js` | Mora, la Chamana del Bosque | Codex |
 | `js/art/art_units.js` | Súbditos (cuerpo a cuerpo, hechicero, cañón), torre, nexo, gólem y lobo | Codex |
-| `js/art/art_items.js` | Nombres, íconos y texto de sabor de los 18 objetos | Codex |
+| `js/art/art_items.js` | Nombres, íconos y texto de sabor de los objetos originales | Codex |
+| `js/art/art_trex.js` | T-Rex | Claude |
+| `js/art/art_dragon.js` | Dragón | Claude |
+| `js/art/art_creeper.js` | Creeper | Claude |
+| `js/art/art_zombie.js` | Zombie | Codex |
+| `js/art/art_enderman.js` | Enderman | Codex |
+| `js/art/art_pikachu.js` | Pikachu | Codex |
+| `js/art/art_items2.js` | Íconos, nombres y texto de sabor de los 15 objetos nuevos de la 0.5 | Codex |
 
-El motor 3D, la integración, el mapa, el multijugador y la interfaz (`render3d.js`, `portraits.js`, `net.js`, `lobby.js`, etc.) los escribió Grok Bot.
+El motor 3D, la integración, el mapa, el multijugador, la tienda, la configuración, el audio y la interfaz (`render3d.js`, `portraits.js`, `net.js`, `lobby.js`, `hud.js`, `settings.js`, `audio.js`, etc.) los escribió Grok Bot. La música es de Ulises, hecha con Suno AI.
 
 **Objetos con personalidad:** cada objeto tiene nombre propio, ícono dibujado y texto de sabor. Por ejemplo: *Tajo de la Otra Cuadra* (Espada Larga), *Botas de la Vereda Paralela* (Botas), *Filo del Casi Imposible* (Filo del Infinito), *Galera del Cosmos Inflado* (Sombrero Mortal), *Sol de Bolsillo Blindado* (Égida).
 
@@ -126,7 +187,14 @@ El motor 3D, la integración, el mapa, el multijugador y la interfaz (`render3d.
 - **Oro:** empezás con 500. Oro pasivo (2 por segundo) y oro solo por el **último golpe** (21 / 14 / 60). La experiencia se reparte entre los aliados cercanos. Campeón: 300 de oro. Torre: 250 si estás cerca y 50 todo el equipo. Jungla: gólem 100, lobo grande 70, lobos chicos 30.
 - **Torres:** atacan primero a súbditos, pero cambian a un campeón que le pegue a un campeón aliado dentro de su rango. Contra campeones cada disparo seguido pega más fuerte. Primero cae la exterior, después la interior, y el nexo se puede atacar cuando cae al menos una interior.
 - **Muerte:** el tiempo de reaparición sube con el nivel (de 10 s a 52,5 s). Nivel máximo 18, con la curva de experiencia de LoL.
-- **Objetos:** costos parecidos a LoL. Al vender recuperás el 70 %.
+- **Objetos:** 33 objetos con costos parecidos a LoL: 11 básicos, 9 intermedios, 4 botas mejoradas (solo un par) y 9 legendarios con **pasivas únicas**. Al vender recuperás el 70 %. Hasta 6 objetos.
+
+### Tienda y recetas
+- Cada objeto armado tiene **componentes**. Por ejemplo, *Cuchilla Negra* = Martillo de Guerra (Espada + Espada) + Gema Avivadora (Rubí) + 950 de oro.
+- **Regla de LoL:** al comprar, los componentes que ya tenés (aunque estén adentro de otro intermedio tuyo) se consumen y pagás solo lo que falta. Cuchilla Negra sale 3000 si no tenés nada, y 1900 si ya tenés Espada, Espada y Rubí.
+- **La tienda** tiene categorías (recomendados para tu rol, todos, básicos, intermedios, legendarios, botas), un árbol con lo que ya tenés en verde, "sirve para", el precio con descuento, comprar con clic derecho, vender y **Deshacer** (la última compra o venta, mientras sigas en la base).
+- **Pasivas únicas:** Cuchilla Negra (cada golpe a un campeón le baja la armadura), Filo del Infinito (críticos 40 % más fuertes), Hidra (golpe en área cuerpo a cuerpo), Huracán (2 rayos extra a distancia), Sombrero (+30 % de poder), Eco (daño extra en tu próxima habilidad, cada 6 s), Égida (quema alrededor), Malla de Espinas (devuelve daño), Rostro Espiritual (+25 % de curas y escudos), Botas de Acero (−12 % de daño de básicos), Botas de Mercurio (tenacidad).
+- **Los bots** compran siguiendo una ruta por rol: primero componentes, después los arman.
 
 ## Estructura
 
@@ -135,10 +203,13 @@ index.html            Página principal (carga los scripts en orden)
 css/style.css         Estilos de la interfaz
 vendor/               Three.js r180 y PeerJS 1.5.5 (copiados, con sus licencias MIT)
 js/core.js            Registro de campeones (MOBA.registerChampion) y utilidades
+js/settings.js        Configuración (localStorage) y su menú
+js/audio.js           Música (archivos o generada) y efectos de sonido
+assets/music/         menu.mp3, batalla.mp3 y tracks.js (qué archivo usar)
 js/art.js             Registro del arte 3D (MOBA.defineChampionArt, defineUnitArt, defineProp, defineItemArt…)
 js/champions/*.js     UN ARCHIVO POR CAMPEÓN (datos y habilidades)
 js/art/art_*.js       Arte 3D: un archivo por campeón + unidades, escenografía y objetos
-js/items.js           Objetos de la tienda y compras de los bots
+js/items.js           Objetos, recetas (MOBA.purchasePlan), pasivas, recomendados y rutas de los bots
 js/map.js             Mapa: carriles, río, paredes, arbustos, campamentos y búsqueda de caminos (A*)
 js/entities.js        Unidades: campeones, súbditos, torres, nexos, monstruos
 js/abilities.js       Sistema genérico de habilidades (dirigido por datos)
@@ -252,7 +323,8 @@ Listo: el campeón aparece en la selección (con su retrato 3D), en las salas mu
 | `area` | Círculo en la posición del mouse | `range`, `radius`, `delay`, `duration` + `tick` (zona persistente) |
 | `self` | Alrededor del propio campeón (o solo buffs si no tiene `radius`) | `radius`, `allyRadius` |
 | `dash` | Desplazamiento hacia el mouse | `range`, `speed`, `blink` (teletransporte), `radius` (daño al caer), `hitAlongPath` (daña en el trayecto) |
-| `target` | Golpe al enemigo más cercano al mouse dentro del alcance | `range` |
+| `target` | Golpe al enemigo más cercano al mouse dentro del alcance | `range`, `championsOnly`, `blinkToTarget` (aparece al lado) |
+| `cone` | Cono desde el campeón hacia el mouse | `range`, `angle` (apertura en grados) |
 
 **Comunes:** `cd` (segundos), `mana`, `damage`, `damageType` (`physical` | `magic` | `true`), `color`, `executeBonus` (más daño cuanta menos vida tenga el objetivo).
 
@@ -262,10 +334,12 @@ Listo: el campeón aparece en la selección (con su retrato 3D), en las salas mu
 Esto se calcula como `base + lvl × (nivel − 1) + ad × Daño total + bonusAd × Daño adicional + ap × Poder + maxHp × VidaMáx`.
 
 **Efectos:**
-- `effects` → sobre los enemigos alcanzados: `slow {amount, duration}`, `stun {duration}`, `knockback {distance}`, `dot {dps, duration}`.
+- `effects` → sobre los enemigos alcanzados: `slow {amount, duration}`, `stun {duration}`, `knockback {distance}`, `dot {dps, duration}`, `fear {duration}` (huyen), `pull` (los atrae), `armorShred {amount, duration}`.
 - `selfEffects` → sobre quien lanza la habilidad.
 - `allyEffects` → sobre los aliados en `allyRadius` (o dentro del área, si es `area`).
-- Efectos de buff: `shield`, `haste`, `attackSpeed`, `armor`, `mr`, `lifesteal` (todos con `amount` y `duration`), más `heal {amount}` y `mana {amount}`.
+- Efectos de buff: `shield`, `haste`, `attackSpeed`, `armor`, `mr`, `lifesteal`, `stealth` (sigilo), `undying` (no puede morir), `grow` (crece) — todos con `amount` y `duration` —, más `heal {amount}` y `mana {amount}`.
+- `selfDamage: 0.1` → la habilidad le cuesta al que la lanza ese porcentaje de su vida actual.
+- Pasivas de campeón (`passive: { id }`): `revive`, `quickRespawn`, `static`.
 
 **IA:** los bots deducen solos cómo usar cada habilidad (daño, entrar a pelear, escapar, buff, ayudar a aliados).
 Si querés forzar un uso, agregá `aiKind: 'damage' | 'engage' | 'escape' | 'buff' | 'ally'`.
@@ -280,7 +354,8 @@ node tools/test.js --sin-peer                        # sin la prueba online (por
 ```
 
 El test usa WebGL por software (SwiftShader), así que anda en una compu sin placa de video. Revisa:
-- Que carguen Three.js, PeerJS y el arte de los 10 campeones, unidades, escenografía y objetos, y que la escena 3D se dibuje.
+- Que carguen Three.js, PeerJS y el arte de los 16 campeones, unidades, escenografía y objetos, y que la escena 3D se dibuje.
+- **0.5:** descuento de recetas (3000 → 1900), comprar consume los componentes, Deshacer, árbol de la tienda con lo que tenés, bots que compran por rutas, filtro Asesino, que carguen los archivos de música, reasignar una tecla (la nueva anda y la vieja no), lanzamiento rápido, modo daltonismo en colores de equipo, barras, aros y minimapa, inclinación de cámara en vivo, que la configuración sobreviva a recargar la página, y que los 6 campeones nuevos carguen con su arte y lancen Q/W/E/R.
 - La ficha de campeón con historia y frase.
 - Subida de habilidades: 1 punto en nivel 1, Ctrl+Q, botón +, Alt+E, R bloqueada hasta nivel 6, tope de rango.
 - Apuntado generoso, cursor de espada, prioridad de campeones, Shift, atacar-mover y ataque automático.
@@ -297,7 +372,7 @@ Para depurar, en la consola del navegador tenés `MOBA.debug.simulate(segundos)`
 - No hay niebla de guerra general: solo se esconden las unidades dentro de arbustos.
 - Hay 2 torres por carril (no 3 más inhibidores), no hay dragones ni barón.
 - El multijugador depende del navegador del anfitrión: si se le cuelga o cierra la pestaña, se corta la partida. No hay reconexión ni servidor TURN propio, y los clientes ven el mundo con ~100 ms de retraso más la latencia.
-- Los objetos dan estadísticas, sin pasivas únicas ni recetas. Los campeones no tienen pasivas propias.
+- Solo algunos campeones (los nuevos) tienen pasiva propia.
 - La IA es simple: no hace emboscadas ni juega la visión.
 - En compus sin placa de video el 3D puede andar lento: probá `?low=1`.
-- No hay sonido ni balance fino.
+- No hay balance fino. Los efectos de sonido son sintéticos y simples.

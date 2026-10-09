@@ -20,11 +20,13 @@
 
   function showSelect() {
     if (renderer) { renderer.dispose(); }
+    if (hud && hud.destroy) hud.destroy();
     session = null; world = null; renderer = null; hud = null;
     $('game-screen').classList.add('hidden');
     $('lobby-screen').classList.add('hidden');
     $('select-screen').classList.remove('hidden');
     M.SelectScreen.init({ onPlay: startSolo });
+    if (M.Audio) M.Audio.setScene('menu');
   }
 
   function startSolo(defId) { return startView(new M.Net.LocalSession(new M.Game(defId))); }
@@ -41,8 +43,9 @@
     $('game-screen').classList.remove('hidden');
     session = s; world = s.world;
     renderer = new M.Renderer($('game-canvas'), $('overlay-canvas'), world, { low: LOW });
-    renderer.camLocked = true;
+    renderer.camLocked = !!M.Settings.get('camLockDefault');
     renderer.resize();
+    if (M.Audio) M.Audio.setScene('match');
     hud = new M.HUD(session, renderer);
     s.onNotice = function (t) { if (hud) hud.showNotice(t); };
     world.onGameOver = function (winner) {
@@ -64,7 +67,15 @@
     '<path d="M15 24 L24 15" stroke="#ffd54a" stroke-width="3" stroke-linecap="round"/>' +
     '<path d="M21 21 L28 28" stroke="#300" stroke-width="6" stroke-linecap="round"/>' +
     '<path d="M21 21 L28 28" stroke="#b07a3a" stroke-width="3" stroke-linecap="round"/></svg>') + '") 4 4, crosshair';
-  const ABILITY_KEYS = { KeyQ: 0, KeyW: 1, KeyE: 2, KeyR: 3 };
+  const SLOT_ACTIONS = { q: 0, w: 1, e: 2, r: 3 }, LEARN_ACTIONS = { learnQ: 0, learnW: 1, learnE: 2, learnR: 3 };
+  const ST = M.Settings;
+  let pingHeld = false, aimNormal = false;
+  /** Acciones "mantenidas" cuya tecla principal (sin modificadores) es este código. */
+  function releasedActions(code) {
+    const out = [], keys = ST.get('keys');
+    for (const a in keys) if (keys[a].some(function (k) { return k && (k === code || k.slice(-code.length - 1) === '+' + code); })) out.push(a);
+    return out;
+  }
   let shiftHeld = false, attackArmed = false, armedAt = 0, aiming = null, lastCO = null;
 
   function worldMouse() { return renderer.screenToWorld(mouse.x, mouse.y); }
@@ -123,7 +134,28 @@
     return w;
   }
 
-  function setAiming(slot) { aiming = slot; if (renderer) renderer.aim = slot; }
+  function setAiming(slot) { aiming = slot; if (slot == null) aimNormal = false; if (renderer) renderer.aim = slot; }
+
+  /** Tecla de habilidad apretada: según el modo de lanzamiento elegido en Configuración. */
+  function abilityDown(slot) {
+    const p = me();
+    if (!p || p.dead) return;
+    const ab = p.def.abilities[slot], mode = ST.get('castMode');
+    if (mode === 'quick' || (mode === 'normal' && ab && ab.cast === 'self')) { setAiming(null); castSlot(slot); return; }
+    setAiming(slot);
+    aimNormal = mode === 'normal';
+  }
+  function sendPing(w, danger) {
+    if (!w) return;
+    const err = cmd({ t: 'ping', x: Math.round(w.x), y: Math.round(w.y), k: danger ? 'danger' : 'go' });
+    if (err && hud) hud.showNotice(err);
+  }
+  function openSettings() {
+    const wasPaused = world && session && session.canPause ? world.paused : null;
+    if (world && session && session.canPause) world.paused = true;
+    setAiming(null); attackArmed = false;
+    M.SettingsUI.open(function () { if (world && wasPaused != null && $('pause').classList.contains('hidden')) world.paused = wasPaused; });
+  }
 
   function togglePause(force) {
     if (!world || world.over) return;
@@ -150,15 +182,20 @@
       mouse.x = e.clientX; mouse.y = e.clientY; mouse.inside = true; shiftHeld = e.shiftKey;
       if (e.button === 2) {
         if (aiming != null) { setAiming(null); return; }       // clic derecho cancela el apuntado
+        if (pingHeld) { sendPing(worldMouse(), true); return; }
         if (attackArmed) { attackArmed = false; }
         rightHeld = true; lastRightMove = performance.now(); issueRightClick(true);
+      } else if (e.button === 0 && (pingHeld || e.altKey)) {
+        sendPing(worldMouse(), e.ctrlKey);
+      } else if (e.button === 0 && aiming != null && aimNormal) {
+        const slot = aiming; setAiming(null); castSlot(slot);
       } else if (e.button === 0 && attackArmed) {
         attackArmed = false;
         attackMoveTo(worldMouse());
       }
     });
     window.addEventListener('mouseup', function (e) { if (e.button === 2) rightHeld = false; });
-    window.addEventListener('blur', function () { rightHeld = false; shiftHeld = false; setAiming(null); });
+    window.addEventListener('blur', function () { rightHeld = false; shiftHeld = false; pingHeld = false; setAiming(null); });
     canvas.addEventListener('wheel', function (e) {
       if (!renderer) return;
       e.preventDefault();
@@ -175,7 +212,8 @@
       if (!world) return;
       e.preventDefault();
       const w = minimapWorld(e), p = me();
-      if (e.button === 0 && attackArmed) { attackArmed = false; attackMoveTo(w); }
+      if (e.button === 0 && (pingHeld || e.altKey)) sendPing(w, e.ctrlKey);
+      else if (e.button === 0 && attackArmed) { attackArmed = false; attackMoveTo(w); }
       else if (e.button === 0) { mmDrag = true; renderer.camLocked = false; renderer.cam.x = w.x; renderer.cam.y = w.y; }
       else if (e.button === 2 && p && !p.dead) {
         cmd({ t: 'move', x: Math.round(w.x), y: Math.round(w.y) });
@@ -190,51 +228,51 @@
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
       const code = e.code;
       shiftHeld = e.shiftKey;
-      if (code === 'Tab') { e.preventDefault(); hud.toggleScoreboard(true); return; }
       if (code === 'Escape') {
         if (aiming != null || attackArmed) { setAiming(null); attackArmed = false; return; }
         if (!$('shop').classList.contains('hidden')) hud.toggleShop(false); else togglePause();
         return;
       }
-      if (world.paused) return;
-      if (ABILITY_KEYS[code] != null && (e.ctrlKey || e.altKey)) {
-        // Ctrl/Alt + Q/W/E/R: subir la habilidad (como en LoL)
-        e.preventDefault();
-        if (!e.repeat) hud.learn(ABILITY_KEYS[code]);
-        return;
-      }
-      if (ABILITY_KEYS[code] != null) {
-        if (!e.repeat) setAiming(ABILITY_KEYS[code]);
-        return;
-      }
-      switch (code) {
-        case 'KeyA':
+      if (code === 'ArrowUp' || code === 'ArrowDown' || code === 'ArrowLeft' || code === 'ArrowRight') { e.preventDefault(); keysPan[code] = true; return; }
+      const act = ST.actionFor(e);
+      if (act === 'scoreboard') { e.preventDefault(); hud.toggleScoreboard(true); return; }
+      if (world.paused || !act) return;
+      if (LEARN_ACTIONS[act] != null) { e.preventDefault(); if (!e.repeat) hud.learn(LEARN_ACTIONS[act]); return; }
+      if (SLOT_ACTIONS[act] != null) { e.preventDefault(); if (!e.repeat) abilityDown(SLOT_ACTIONS[act]); return; }
+      switch (act) {
+        case 'attackMove':
           if (!e.repeat) { attackArmed = true; armedAt = performance.now(); attackMoveTo(worldMouse()); }
           break;
-        case 'KeyB': cmd({ t: 'recall' }); break;
-        case 'KeyC': renderer.showRange = true; break;
-        case 'KeyP': hud.toggleShop(); break;
-        case 'KeyY': renderer.camLocked = !renderer.camLocked; break;
-        case 'KeyS': cmd({ t: 'stop' }); attackArmed = false; if (!session.local && me()) me().targetId = 0; break;
-        case 'Space': e.preventDefault(); spaceHeld = true; break;
-        case 'ArrowUp': case 'ArrowDown': case 'ArrowLeft': case 'ArrowRight': e.preventDefault(); keysPan[code] = true; break;
+        case 'recall': cmd({ t: 'recall' }); break;
+        case 'range': renderer.showRange = true; break;
+        case 'shop': hud.toggleShop(); break;
+        case 'camLock': if (!e.repeat) renderer.camLocked = !renderer.camLocked; break;
+        case 'stop': cmd({ t: 'stop' }); attackArmed = false; if (!session.local && me()) me().targetId = 0; break;
+        case 'center': e.preventDefault(); spaceHeld = true; break;
+        case 'ping': pingHeld = true; break;
       }
     });
     window.addEventListener('keyup', function (e) {
       if (!world) return;
       shiftHeld = e.shiftKey;
-      if (e.code === 'Tab') hud.toggleScoreboard(false);
-      if (e.code === 'Space') spaceHeld = false;
-      if (e.code === 'KeyC') renderer.showRange = false;
-      if (ABILITY_KEYS[e.code] != null && aiming === ABILITY_KEYS[e.code]) {
-        setAiming(null);
-        if (!world.paused) castSlot(ABILITY_KEYS[e.code]);
+      for (const act of releasedActions(e.code)) {
+        if (act === 'scoreboard') hud.toggleScoreboard(false);
+        if (act === 'center') spaceHeld = false;
+        if (act === 'range') renderer.showRange = false;
+        if (act === 'ping') pingHeld = false;
+        if (SLOT_ACTIONS[act] != null && aiming === SLOT_ACTIONS[act] && !aimNormal) {
+          setAiming(null);
+          if (!world.paused) castSlot(SLOT_ACTIONS[act]);
+        }
       }
       keysPan[e.code] = false;
     });
     window.addEventListener('resize', function () { if (renderer) renderer.resize(); });
     $('resume-btn').onclick = function () { togglePause(false); };
     $('quit-btn').onclick = function () { togglePause(false); M.Lobby.reset(); showSelect(); };
+    $('pause-settings-btn').onclick = function () { M.SettingsUI.open(); };
+    $('hud-gear').onclick = function () { openSettings(); };
+    $('menu-gear').onclick = function () { M.SettingsUI.open(); };
   }
 
   /** Cada cuadro: enemigo resaltado bajo el cursor, cursor de espada e indicador de apuntado. */
@@ -253,7 +291,7 @@
 
   function updateCamera(dt) {
     const cam = renderer.cam, p = me();
-    const pan = 1500 * dt / Math.max(0.5, renderer.userZoom);
+    const pan = 1500 * dt / Math.max(0.5, renderer.userZoom), edgePan = ST.get('edgePan') * dt / Math.max(0.5, renderer.userZoom), k = ST.get('camSmooth');
     let panned = false;
     if (keysPan.ArrowUp) { cam.y -= pan; panned = true; }
     if (keysPan.ArrowDown) { cam.y += pan; panned = true; }
@@ -261,12 +299,12 @@
     if (keysPan.ArrowRight) { cam.x += pan; panned = true; }
     if (panned) renderer.camLocked = false;
     if ((renderer.camLocked || spaceHeld) && p) {
-      cam.x = U.lerp(cam.x, p.x, Math.min(1, dt * 10));
-      cam.y = U.lerp(cam.y, p.y + 120, Math.min(1, dt * 10));
-    } else if (mouse.inside) {
+      cam.x = U.lerp(cam.x, p.x, Math.min(1, dt * k));
+      cam.y = U.lerp(cam.y, p.y + 120, Math.min(1, dt * k));
+    } else if (mouse.inside && edgePan > 0 && document.hasFocus()) {
       const W = renderer.W, H = renderer.H, edge = 16;
-      if (mouse.x < edge) cam.x -= pan; else if (mouse.x > W - edge) cam.x += pan;
-      if (mouse.y < edge) cam.y -= pan; else if (mouse.y > H - edge) cam.y += pan;
+      if (mouse.x < edge) cam.x -= edgePan; else if (mouse.x > W - edge) cam.x += edgePan;
+      if (mouse.y < edge) cam.y -= edgePan; else if (mouse.y > H - edge) cam.y += edgePan;
     }
     renderer.clampCam();
   }
@@ -325,17 +363,24 @@
   // API de depuración (usada por los tests)
   M.debug = {
     start: function (id) { return startSolo(id); },
+    /** Partida con equipos elegidos: ids[0] sos vos (Azul), ids[1..4] tus aliados, ids[5..9] el equipo Rojo. */
+    startWith: function (ids) {
+      const roster = ids.map(function (id, i) { return { defId: id, team: i < 5 ? 0 : 1, human: i === 0, slot: i === 0 ? 'local' : null, name: i === 0 ? 'Vos' : '' }; });
+      return startView(new M.Net.LocalSession(new M.Game({ roster: roster, localSlot: 'local' })));
+    },
     simulate: function (seconds) { if (!session || !session.local) return; const g = session.game, n = Math.round(seconds / STEP), was = g.paused; g.paused = false; for (let i = 0; i < n && !g.over; i++) { g.update(STEP); if (i % 3 === 0) session.step(STEP * 3); } g.paused = was; },
     cast: function (slot, x, y) { return !cmd({ t: 'cast', s: slot, x: x, y: y }); },
     cmd: function (c) { return cmd(c); },
     get game() { return world; },
     get session() { return session; },
     get renderer() { return renderer; },
-    hoverTarget: function () { return hoverTarget(); }
+    hoverTarget: function () { return hoverTarget(); },
+    get aiming() { return aiming; }
   };
 
   window.addEventListener('DOMContentLoaded', function () {
     bindInput();
+    if (M.Audio) M.Audio.init();
     M.Lobby.initMenu();
     showSelect();
     requestAnimationFrame(frame);

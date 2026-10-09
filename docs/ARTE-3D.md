@@ -46,7 +46,7 @@ build(THREE, ctx) -> { object: THREE.Object3D, update(state) }
 ## Contrato de un efecto de habilidad (fx)
 ```js
 fx: { Q: function (THREE, ctx, info) -> { object, update(p, dt) }, W: ..., E: ..., R: ... }
-// info: { kind, radius, width, length, duration, slot }
+// info: { kind, radius, width, length, angle, duration, slot }
 // kind: 'projectile' (misil centrado en el origen, viaja hacia +Z, ancho = info.width)
 //       'area' (efecto en el suelo centrado en el origen, radio = info.radius; p 0..1 durante la advertencia+explosión
 //               o durante toda la duración si es persistente)
@@ -55,6 +55,7 @@ fx: { Q: function (THREE, ctx, info) -> { object, update(p, dt) }, W: ..., E: ..
 //       'burst' (impacto breve, radio info.radius)
 //       'dash' (estela/explosión al salir o llegar de un desplazamiento, radio info.radius)
 //       'target' (impacto sobre el objetivo, radio info.radius)
+//       'cone' (cono en el suelo desde el origen hacia +Z: largo info.length, apertura total info.angle en grados; ej. aliento de fuego)
 // p: progreso 0..1 de la vida del efecto. Yo lo posiciono, oriento y destruyo (dispose) al terminar.
 ```
 - Cada fx DEBE funcionar con cualquier `kind` (usá el que corresponde a la habilidad como caso principal, y un buen genérico para el resto).

@@ -9,12 +9,25 @@
     return M.Abilities.statsText(ab).join(' · ');
   }
   M.abilityMeta = abilityMeta;
+  /** Resalta el valor del rango actual en textos tipo "60/90/120/150/180". */
+  function highlightRank(text, rank) {
+    if (!rank) return text;
+    return text.replace(/\d+(?:[.,]\d+)?%?(?:\/\d+(?:[.,]\d+)?%?){2,}/g, function (m) {
+      return m.split('/').map(function (v, i) { return i === rank - 1 ? '<b class="rank-now">' + v + '</b>' : v; }).join('/');
+    });
+  }
+  M.highlightRank = highlightRank;
+  const SHOP_TABS = [['rec', 'Recomendados'], ['all', 'Todos'], ['1', 'Básicos'], ['2', 'Intermedios'], ['3', 'Legendarios'], ['boots', 'Botas']];
 
   class HUD {
     constructor(session, renderer) {
       this.session = session; this.game = session.world; this.renderer = renderer; this.p = session.world.player;
       this.slowTimer = 0;
+      this.shopTab = 'rec'; this.shopSel = null;
+      this.lastLevel = session.world.player.level; this.lastGold = session.world.player.gold;
       this.build();
+      this.settingsFn = (k) => { if (k === 'keys' || k === '*') this.refreshKeys(); };
+      M.Settings.on(this.settingsFn);
     }
 
     build() {
@@ -34,7 +47,7 @@
         const el = document.createElement('div');
         el.className = 'ability';
         el.style.background = 'linear-gradient(160deg, ' + U.hexToRgba(def.color, 0.85) + ', ' + U.hexToRgba(ab.color, 0.35) + ')';
-        el.innerHTML = '<div class="ab-key">' + ab.key + '</div><div class="ab-mana"></div>' +
+        el.innerHTML = '<div class="ab-key">' + M.Settings.label(['q', 'w', 'e', 'r'][i]) + '</div><div class="ab-mana"></div>' +
           '<div class="ab-name">' + ab.name + '</div><div class="ab-cd"></div><div class="ab-cdtext"></div>';
         const pips = document.createElement('div');
         pips.className = 'rank-pips';
@@ -53,9 +66,17 @@
       this.xpFill = document.querySelector('.bar.xp .fill');
       this.mctx = $('minimap').getContext('2d');
       $('shop-btn').onclick = () => this.toggleShop();
+      if (!$('fps')) { const f = document.createElement('div'); f.id = 'fps'; $('hud').appendChild(f); }
       ['scoreboard', 'shop', 'death-overlay', 'endscreen', 'pause', 'tooltip'].forEach(function (id) { $(id).classList.add('hidden'); });
       $('killfeed').innerHTML = '';
     }
+
+    refreshKeys() {
+      const acts = ['q', 'w', 'e', 'r'];
+      this.abEls.forEach(function (a, i) { const k = a.el.querySelector('.ab-key'); if (k) k.textContent = M.Settings.label(acts[i]); });
+      $('shop-btn').title = 'Tienda (' + M.Settings.label('shop') + ')';
+    }
+    destroy() { const fn = this.settingsFn; M.Settings.listeners = M.Settings.listeners.filter(function (f) { return f !== fn; }); }
 
     learn(slot) {
       if (!this.p.canLearn(slot)) return false;
@@ -66,8 +87,13 @@
 
     abilityTooltip(i) {
       const ab = this.p.def.abilities[i], rank = this.p.ranks[i];
-      let html = '<b>[' + ab.key + '] ' + ab.name + '</b> <span style="color:#8fa0c0">Rango ' + rank + '/' + M.MAX_RANK[i] + '</span><br>' + ab.desc +
-        '<br><span style="color:#cfe0ff">' + M.Abilities.statsText(ab).join('<br>') + '</span>';
+      const key = M.Settings.label(['q', 'w', 'e', 'r'][i]);
+      let html = '<b>[' + key + '] ' + ab.name + '</b> <span style="color:#8fa0c0">Rango ' + rank + '/' + M.MAX_RANK[i] + '</span><br>' + ab.desc +
+        '<br><span style="color:#cfe0ff">' + highlightRank(M.Abilities.statsText(ab).join('<br>'), rank) + '</span>';
+      if (rank) {
+        const cost = Math.round(this.p.manaCost(i)), cd = this.p.cooldown(i);
+        html += '<br><span style="color:#9fe0ff">Ahora: ' + (cost ? cost + ' de maná · ' : '') + 'enfriamiento ' + cd.toFixed(1) + ' s (con tu aceleración)</span>';
+      }
       if (i === 3) html += '<br><span style="color:#8fa0c0">Se aprende en los niveles 6, 11 y 16</span>';
       else html += '<br><span style="color:#8fa0c0">Rango máximo: 5 (como mucho ⌈nivel/2⌉)</span>';
       return html;
@@ -106,7 +132,7 @@
         a.txt.textContent = locked ? (i === 3 && p.level < 6 ? 'Nv 6' : '') : (cd > 0 ? (cd < 1 ? cd.toFixed(1) : Math.ceil(cd)) : '');
       });
       const sp = $('skill-points');
-      const spText = p.skillPoints > 0 ? 'Puntos de habilidad: ' + p.skillPoints + ' (botón + o Ctrl/Alt + Q W E R)' : '';
+      const spText = p.skillPoints > 0 ? 'Puntos de habilidad: ' + p.skillPoints + ' (botón + o ' + M.Settings.label('learnQ') + ' / ' + M.Settings.label('learnW') + ' …)' : '';
       if (sp.textContent !== spText) sp.textContent = spText;
       this.hpFill.style.width = (p.hp / p.maxHp * 100) + '%';
       const sh = p.shieldAmount();
@@ -116,6 +142,9 @@
       this.xpFill.style.width = (p.level >= 18 ? 100 : p.xp / p.xpToNext() * 100) + '%';
 
       this.renderer.drawMinimap(this.mctx, 220);
+      // sonidos de la interfaz: subir de nivel, comprar/vender
+      if (p.level > this.lastLevel && M.Audio) M.Audio.sfx('levelup');
+      this.lastLevel = p.level;
 
       this.slowTimer -= dt;
       if (this.slowTimer > 0) return;
@@ -127,6 +156,8 @@
       $('score-red').textContent = g.score[1];
       $('timer').textContent = U.fmtTime(g.time);
       $('gold').textContent = Math.floor(p.gold);
+      const fps = $('fps');
+      if (fps) { const on = !!M.Settings.get('showFps'); fps.style.display = on ? '' : 'none'; if (on) fps.textContent = Math.round(this.renderer.fps) + ' FPS'; }
       $('stats').innerHTML =
         '<span>Daño <b>' + Math.round(p.ad) + '</b></span><span>Poder <b>' + Math.round(p.ap) + '</b></span>' +
         '<span>Armadura <b>' + Math.round(p.getArmor()) + '</b></span><span>Res. mág. <b>' + Math.round(p.getMr()) + '</b></span>' +
@@ -137,7 +168,8 @@
       let items = '';
       const ikey = p.items.join(',');
       if (ikey === this.itemsKey) items = null;
-      this.itemsKey = ikey;
+      else if (this.itemsKey != null && M.Audio) M.Audio.sfx(p.gold < this.lastGold ? 'buy' : 'sell');
+      this.itemsKey = ikey; this.lastGold = p.gold;
       if (items !== null) {
         for (let i = 0; i < M.MAX_ITEMS; i++) {
           const it = p.items[i] ? M.itemById[p.items[i]] : null;
@@ -156,7 +188,7 @@
       let status = '';
       if (p.recalling) status = 'Volviendo a la base… ' + p.recalling.t.toFixed(1) + ' s';
       else if (g.time < g.firstWave) status = 'Los súbditos aparecen en ' + Math.ceil(g.firstWave - g.time) + ' s · Clic derecho: moverte/atacar · A: atacar-mover';
-      else if (!this.renderer.camLocked) status = 'Cámara libre (Y para fijar, Espacio para centrar)';
+      else if (!this.renderer.camLocked) status = 'Cámara libre (' + M.Settings.label('camLock') + ' para fijar, ' + M.Settings.label('center') + ' para centrar)';
       if (this.notice && g.time < this.noticeUntil) status = this.notice;
       $('status-line').textContent = status;
       if (!$('scoreboard').classList.contains('hidden')) this.renderScoreboard();
@@ -186,35 +218,100 @@
       if (show) this.renderShop(true);
     }
 
+    /** Árbol de construcción: marca como "tuyos" los componentes que ya tenés (se consumen al comprar). */
+    treeHtml(id, pool, depth) {
+      const it = M.itemById[id];
+      let owned = false;
+      if (depth > 0) { const o = pool.find(function (q) { return !q.used && q.id === id; }); if (o) { o.used = true; owned = true; } }
+      let html = '<div class="tnode d' + depth + (owned ? ' owned' : '') + '"><div class="tcard" data-sel="' + id + '" title="' + U.escapeHtml(M.itemName(id)) + '">' +
+        '<img src="' + M.Portraits.itemIcon(id, 48) + '"><span>' + (owned ? '✔' : it.cost) + '</span></div>';
+      if (!owned && it.from && it.from.length) {
+        html += '<div class="tkids">';
+        for (const f of it.from) html += this.treeHtml(f, pool, depth + 1);
+        html += '</div>';
+      }
+      return html + '</div>';
+    }
+
     renderShop(full) {
       const g = this.game, p = this.p, el = $('shop');
       const can = g.canShop(p);
-      const key = Math.floor(p.gold) + '|' + p.items.join(',') + '|' + can + '|' + (this.shopMsg || '');
+      const undoN = p.undo ? p.undo.length : (p.undoCount || 0);
+      const key = Math.floor(p.gold) + '|' + p.items.join(',') + '|' + can + '|' + (this.shopMsg || '') + '|' + this.shopTab + '|' + this.shopSel + '|' + undoN;
       if (!full && key === this.shopKey) return;
       this.shopKey = key;
-      let html = '<button class="close-btn" data-close="1">Cerrar (P)</button><h2>Tienda</h2>' +
-        '<div style="color:#ffd54a;font-weight:bold">Oro: ' + Math.floor(p.gold) + ' · Objetos: ' + p.items.length + '/' + M.MAX_ITEMS + '</div>' +
-        '<div class="shop-note">' + (this.shopMsg || (can ? '' : 'Tenés que estar en la base (o muerto) para comprar.')) + '</div><div class="shop-grid">';
-      for (const it of M.ITEMS) {
-        const dis = !can || p.gold < it.cost || p.items.length >= M.MAX_ITEMS;
-        html += '<div class="shop-item"><img class="icon" src="' + M.Portraits.itemIcon(it.id, 64) + '"><div class="iname">' + M.itemName(it.id) + '</div>' +
-          '<div class="istats">' + it.desc + '</div><div class="iflavor">' + M.itemFlavor(it.id) + '</div><div class="icost">' + it.cost + ' oro</div>' +
-          '<button data-buy="' + it.id + '"' + (dis ? ' disabled' : '') + '>Comprar</button></div>';
+      const role = p.def.role, rec = M.RECOMMENDED[role] || [];
+      let list;
+      if (this.shopTab === 'rec') {
+        // recomendados del rol + sus componentes, en orden de compra
+        const seen = {}; list = [];
+        const add = function (id) { if (seen[id]) return; seen[id] = 1; list.push(M.itemById[id]); };
+        rec.forEach(function (id) { (M.itemById[id].from || []).forEach(function (f) { (M.itemById[f].from || []).forEach(add); add(f); }); add(id); });
+      } else if (this.shopTab === 'boots') list = M.ITEMS.filter(function (it) { return M.isBoots(it.id); });
+      else if (this.shopTab === 'all') list = M.ITEMS.slice();
+      else list = M.ITEMS.filter((it) => String(it.tier) === this.shopTab && !M.isBoots(it.id));
+      if (!this.shopSel || !M.itemById[this.shopSel]) this.shopSel = rec[0] || M.ITEMS[0].id;
+      const card = (it) => {
+        const plan = M.purchasePlan(p.items, it.id), err = M.canBuy(p, it.id, can);
+        const disc = plan.cost < it.cost;
+        return '<div class="scard' + (it.id === this.shopSel ? ' sel' : '') + (err ? ' cant' : '') + (rec.indexOf(it.id) >= 0 ? ' rec' : '') + '" data-sel="' + it.id + '" title="Clic: ver · Clic derecho: comprar">' +
+          '<img src="' + M.Portraits.itemIcon(it.id, 64) + '"><div class="sname">' + M.itemName(it.id) + '</div>' +
+          '<div class="scost' + (disc ? ' disc' : '') + '">' + (disc ? '<s>' + it.cost + '</s> ' : '') + plan.cost + '</div></div>';
+      };
+      let html = '<div class="shop-head"><h2>Tienda</h2><div class="shop-gold">🪙 ' + Math.floor(p.gold) + ' oro · ' + p.items.length + '/' + M.MAX_ITEMS + ' objetos</div>' +
+        '<button data-undo="1"' + (undoN && can ? '' : ' disabled') + ' title="Deshace tu última compra o venta (mientras sigas en la base)">↶ Deshacer</button>' +
+        '<button class="close-btn" data-close="1">Cerrar (' + M.Settings.label('shop') + ')</button></div>' +
+        '<div class="shop-note">' + U.escapeHtml(this.shopMsg || (can ? 'Clic derecho sobre un objeto para comprarlo. Los componentes que ya tenés se descuentan del precio.' : 'Tenés que estar en la base (o muerto) para comprar.')) + '</div>' +
+        '<div class="shop-tabs">' + SHOP_TABS.map((t) => '<button data-tab="' + t[0] + '" class="' + (t[0] === this.shopTab ? 'active' : '') + '">' + t[1] + (t[0] === 'rec' ? ' (' + role + ')' : '') + '</button>').join('') + '</div>' +
+        '<div class="shop-body"><div class="shop-list">';
+      if (this.shopTab === 'rec') {
+        html += '<div class="shop-sec">Ruta sugerida para ' + role + '</div><div class="shop-cards">' + rec.map(function (id) { return card(M.itemById[id]); }).join('') + '</div>' +
+          '<div class="shop-sec">Componentes</div><div class="shop-cards">' + list.filter(function (it) { return rec.indexOf(it.id) < 0; }).map(card).join('') + '</div>';
+      } else html += '<div class="shop-cards">' + list.map(card).join('') + '</div>';
+      html += '</div>';
+      // detalle del objeto elegido
+      const it = M.itemById[this.shopSel], plan = M.purchasePlan(p.items, it.id), err = M.canBuy(p, it.id, can);
+      const pool = p.items.map(function (x) { return { id: x, used: false }; });
+      html += '<div class="shop-detail"><div class="dhead"><img src="' + M.Portraits.itemIcon(it.id, 64) + '"><div><div class="dname">' + M.itemName(it.id) + '</div>' +
+        (M.itemName(it.id) !== it.name ? '<div class="dclassic">' + it.name + '</div>' : '') +
+        '<div class="dtier">' + (M.isBoots(it.id) ? 'Botas' : ['', 'Básico', 'Intermedio', 'Legendario'][it.tier]) + '</div></div></div>' +
+        '<div class="dstats">' + U.escapeHtml(M.itemStatsText(it)) + '</div>' +
+        (it.passive ? '<div class="dpassive"><b>Pasiva única</b> — ' + U.escapeHtml(it.passive.text) + '</div>' : '') +
+        (M.itemFlavor(it.id) ? '<div class="iflavor">' + M.itemFlavor(it.id) + '</div>' : '') +
+        (it.from ? '<div class="shop-sec">Se arma con</div><div class="tree">' + this.treeHtml(it.id, pool, 0) + '</div>' : '') +
+        (it.into.length ? '<div class="shop-sec">Sirve para</div><div class="into">' + it.into.map(function (x) { return '<div class="tcard" data-sel="' + x + '" title="' + U.escapeHtml(M.itemName(x)) + '"><img src="' + M.Portraits.itemIcon(x, 48) + '"><span>' + M.itemById[x].cost + '</span></div>'; }).join('') + '</div>' : '') +
+        '<div class="dprice">Costo total ' + it.cost + (plan.cost < it.cost ? ' · <b>a vos te sale ' + plan.cost + '</b> (usa ' + plan.consume.length + ' componente' + (plan.consume.length === 1 ? '' : 's') + ' tuyo' + (plan.consume.length === 1 ? '' : 's') + ')' : '') + '</div>' +
+        '<button class="buy-btn" data-buy="' + it.id + '"' + (err ? ' disabled title="' + U.escapeHtml(err) + '"' : '') + '>Comprar (' + plan.cost + ')</button>' +
+        (err && can ? '<div class="derr">' + U.escapeHtml(err) + '</div>' : '') + '</div></div>';
+      // inventario
+      html += '<div class="shop-inv"><span>Inventario (vender al ' + Math.round(M.SELL_RATIO * 100) + '%):</span>';
+      for (let i = 0; i < M.MAX_ITEMS; i++) {
+        const id = p.items[i];
+        html += '<div class="inv-slot">' + (id ? '<img src="' + M.Portraits.itemIcon(id, 48) + '" data-sel="' + id + '" title="' + U.escapeHtml(M.itemName(id)) + '"><button data-sell="' + i + '"' + (can ? '' : ' disabled') + '>' + Math.floor(M.itemById[id].cost * M.SELL_RATIO) + '</button>' : '') + '</div>';
       }
       html += '</div>';
-      if (p.items.length) {
-        html += '<h3 style="margin:12px 0 6px">Tu inventario (vender al 70%)</h3><div class="shop-grid">';
-        p.items.forEach(function (id, i) { html += '<div class="shop-item"><img class="icon" src="' + M.Portraits.itemIcon(id, 64) + '"><div class="iname">' + M.itemName(id) + '</div><button data-sell="' + i + '"' + (can ? '' : ' disabled') + '>Vender (' + Math.floor(M.itemById[id].cost * M.SELL_RATIO) + ')</button></div>'; });
-        html += '</div>';
-      }
+      const scroll = el.querySelector('.shop-list') ? el.querySelector('.shop-list').scrollTop : 0;
       el.innerHTML = html;
-      el.onclick = (e) => {
-        const b = e.target.closest('button');
-        if (!b) return;
+      if (el.querySelector('.shop-list')) el.querySelector('.shop-list').scrollTop = scroll;
+      const act = (b) => {
         if (b.dataset.close) { this.toggleShop(false); return; }
+        if (b.dataset.tab) { this.shopTab = b.dataset.tab; }
         if (b.dataset.buy) this.shopMsg = this.session.cmd({ t: 'buy', item: b.dataset.buy }) || '';
         if (b.dataset.sell) this.shopMsg = this.session.cmd({ t: 'sell', i: +b.dataset.sell }) || '';
+        if (b.dataset.undo) this.shopMsg = this.session.cmd({ t: 'undo' }) || '';
+        if (this.shopMsg && M.Audio) M.Audio.sfx('error');
         this.renderShop(true);
+      };
+      el.onclick = (e) => {
+        const b = e.target.closest('button');
+        if (b) { act(b); return; }
+        const sel = e.target.closest('[data-sel]');
+        if (sel) { this.shopSel = sel.dataset.sel; this.shopMsg = ''; if (M.Audio) M.Audio.sfx('click'); this.renderShop(true); }
+      };
+      el.oncontextmenu = (e) => {
+        e.preventDefault();
+        const sel = e.target.closest('[data-sel]');
+        if (sel) { this.shopSel = sel.dataset.sel; this.shopMsg = this.session.cmd({ t: 'buy', item: sel.dataset.sel }) || ''; if (this.shopMsg && M.Audio) M.Audio.sfx('error'); this.renderShop(true); }
       };
     }
 

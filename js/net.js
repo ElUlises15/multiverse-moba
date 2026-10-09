@@ -129,7 +129,7 @@
     const hidden = u.hiddenFrom && u.hiddenFrom[team];
     if (u.type === 'champion') {
       o.df = u.def.id; o.lv = u.level; o.K = u.kills; o.D = u.deaths; o.A = u.assists; o.cs = u.cs;
-      o.g = r1(u.gold); o.it = u.items; o.hu = u.human ? 1 : 0; o.nm = u.playerName || '';
+      o.g = r1(u.gold); o.it = u.items; o.ud = u.undo ? u.undo.length : 0; o.hu = u.human ? 1 : 0; o.nm = u.playerName || '';
       o.rt = r2(u.respawnTimer);
       if (hidden) { o.hid = 1; return o; }
       o.mn = r1(u.mana); o.MM = r1(u.maxMana); o.xp = r1(u.xp); o.rk = u.ranks; o.sp = u.skillPoints;
@@ -146,6 +146,12 @@
     if (u.isStunned()) o.st = 1;
     if (u.buffMax('slow') > 0) o.sl = 1;
     if (u.dash) o.da = 1;
+    if (u.buffs.length) {
+      if (u.hasBuff('stealth')) o.sg = 1;
+      if (u.hasBuff('undying')) o.un = 1;
+      const g = u.buffMax('grow'); if (g) o.gr = r2(g);
+      if (u.knock && u.knock.fear) o.fr = 1;
+    }
     return o;
   }
 
@@ -173,7 +179,7 @@
   /** Eventos nuevos (efectos, textos, avisos) desde la última foto que recibió ese cliente. */
   Net.events = function (g, champId, since) {
     const fx = [], tx = [], fd = [];
-    for (const f of g.fx) if (f.id > since.fx) fx.push(f);
+    for (const f of g.fx) if (f.id > since.fx && (!f.to || f.to.indexOf(champId) >= 0)) fx.push(f);
     for (const t of g.texts) if (t.id > since.tx && (!t.to || t.to.indexOf(champId) >= 0)) tx.push({ x: r1(t.x), y: r1(t.y), text: t.text, color: t.color, big: t.big, life: t.life, max: t.max });
     for (const f of g.feed) if (f.id > since.fd && (!f.to || f.to.indexOf(champId) >= 0)) fd.push({ text: f.text, color: f.color, time: f.time });
     return { fx: fx, tx: tx, fd: fd };
@@ -208,14 +214,7 @@
     isVisibleTo(team, u) { return !u.hiddenLocal; }
     validTarget(u, t) { return t && !t.dead && t.team !== u.team && t.isTargetable() && !t.hiddenLocal; }
     // Validaciones locales (la decisión final la toma el anfitrión)
-    buyItem(c, id) {
-      const item = M.itemById[id];
-      if (!item) return 'Objeto inexistente';
-      if (!this.canShop(c)) return 'Tenés que estar en la base para comprar';
-      if (c.items.length >= M.MAX_ITEMS) return 'Inventario lleno';
-      if (c.gold < item.cost) return 'No te alcanza el oro';
-      return null;
-    }
+    buyItem(c, id) { return M.canBuy(c, id, this.canShop(c)); }
     sellItem(c, index) { if (!this.canShop(c)) return 'Tenés que estar en la base para vender'; if (!c.items[index]) return 'No hay objeto'; return null; }
 
     ensureUnit(o) {
@@ -252,7 +251,7 @@
         seen[u.id] = true;
         u.team = o.tm; u.hp = o.h; u.maxHp = o.H; u.dead = !!o.d;
         if (u.type === 'champion') {
-          u.level = o.lv; u.kills = o.K; u.deaths = o.D; u.assists = o.A; u.cs = o.cs; u.gold = o.g; u.items = o.it;
+          u.level = o.lv; u.kills = o.K; u.deaths = o.D; u.assists = o.A; u.cs = o.cs; u.gold = o.g; u.items = o.it; u.undoCount = o.ud || 0;
           u.human = !!o.hu; u.isPlayer = u.human; u.playerName = o.nm; u.respawnTimer = o.rt;
           u.hiddenLocal = !!o.hid;
           if (o.hid) { continue; }
@@ -270,6 +269,10 @@
         if (o.sh) u.buffs.push({ type: 'shield', amount: o.sh, remaining: 1 });
         if (o.st) u.buffs.push({ type: 'stun', amount: 1, remaining: 1 });
         u.slowed = !!o.sl; u.dash = o.da ? {} : null;
+        if (o.sg) u.buffs.push({ type: 'stealth', amount: 1, remaining: 1 });
+        if (o.un) u.buffs.push({ type: 'undying', amount: 1, remaining: 1 });
+        if (o.gr) u.buffs.push({ type: 'grow', amount: o.gr, remaining: 1 });
+        u.feared = !!o.fr;
         u.targetId = o.tg || 0;
         u.facing = o.f;
         if (o.x != null) {

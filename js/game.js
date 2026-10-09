@@ -101,6 +101,16 @@
         if (u.brush >= 0 && u.team < 2 && this.time - (u.lastAttackAt || -9) > 1) {
           u.hiddenFrom = [u.team !== 0 && !occ[0].has(u.brush), u.team !== 1 && !occ[1].has(u.brush)];
         } else u.hiddenFrom = null;
+        // Invisibilidad (sigilo): oculto para el otro equipo salvo que una torre o un campeón enemigo esté muy cerca
+        if (u.type === 'champion' && !u.dead && u.isStealthed()) {
+          const e = 1 - u.team;
+          let seen = false;
+          for (const o of this.units) {
+            if (o.dead || o.team !== e || (o.type !== 'champion' && o.type !== 'tower')) continue;
+            if (U.dist(o, u) < (o.type === 'tower' ? 700 : 250)) { seen = true; break; }
+          }
+          if (!seen) { u.hiddenFrom = u.hiddenFrom || [false, false]; u.hiddenFrom[e] = true; }
+        }
       }
     }
     isVisibleTo(team, u) { return !u.hiddenFrom || !u.hiddenFrom[team]; }
@@ -136,6 +146,14 @@
           return 'no';
         case 'buy': return this.buyItem(c, String(cmd.item));
         case 'sell': return this.sellItem(c, cmd.i | 0);
+        case 'undo': return this.undoShop(c);
+        case 'ping': {
+          if (this.time - (c.lastPing || -9) < 0.7) return 'Esperá un poco para volver a marcar';
+          c.lastPing = this.time;
+          const px = U.clamp(+cmd.x || 0, 0, M.MAP.width), py = U.clamp(+cmd.y || 0, 0, M.MAP.height);
+          this.pushFx({ type: 'ping', x: px, y: py, kind: cmd.k === 'danger' ? 'danger' : 'go', team: c.team, name: c.playerName || c.name, life: 3, max: 3 });
+          return null;
+        }
         case 'recall': this.startRecall(c); return null;
         case 'co': c.championsOnly = !!cmd.v; return null;
       }
@@ -144,10 +162,12 @@
     validTarget(u, t) {
       return t && !t.dead && t.team !== u.team && t.isTargetable() && (u.type !== 'champion' || this.isVisibleTo(u.team, t));
     }
-    findAbilityTarget(c, tx, ty, range) {
+    findAbilityTarget(c, tx, ty, range, championsOnly) {
       let best = null, bd = Infinity;
       for (const u of this.units) {
         if (u.team === c.team || !A.isHittable(u)) continue;
+        if (championsOnly && u.type !== 'champion') continue;
+        if (!this.isVisibleTo(c.team, u)) continue;
         if (U.dist(c, u) > range + u.radius + c.radius) continue;
         const d = U.distXY(u.x, u.y, tx, ty) - (u.type === 'champion' ? 40 : 0);
         if (d < bd && d < 300 + u.radius) { bd = d; best = u; }
@@ -226,28 +246,67 @@
 
     // ---------- Tienda ----------
     canShop(c) { return c.dead || this.atFountain(c); }
+    /** Compra con la regla de LoL: usa los componentes que ya tenés y cobra solo lo que falta. */
     buyItem(c, id) {
-      const item = M.itemById[id];
-      if (!item) return 'Objeto inexistente';
-      if (!this.canShop(c)) return 'Tenés que estar en la base para comprar';
-      if (c.items.length >= M.MAX_ITEMS) return 'Inventario lleno';
-      if (c.gold < item.cost) return 'No te alcanza el oro';
-      c.gold -= item.cost; c.items.push(id); c.recalc(false);
+      const err = M.canBuy(c, id, this.canShop(c));
+      if (err) return err;
+      const plan = M.purchasePlan(c.items, id);
+      const consumed = plan.consume.map(function (i) { return c.items[i]; });
+      for (let k = plan.consume.length - 1; k >= 0; k--) c.items.splice(plan.consume[k], 1);
+      c.items.push(id);
+      c.gold -= plan.cost;
+      c.recalc(false);
+      c.undo.push({ t: 'buy', id: id, cost: plan.cost, consumed: consumed });
+      if (c.undo.length > 20) c.undo.shift();
       return null;
     }
     sellItem(c, index) {
       if (!this.canShop(c)) return 'Tenés que estar en la base para vender';
       const id = c.items[index];
       if (!id) return 'No hay objeto';
-      c.items.splice(index, 1); c.gold += Math.floor(M.itemById[id].cost * M.SELL_RATIO); c.recalc(false);
+      const value = Math.floor(M.itemById[id].cost * M.SELL_RATIO);
+      c.items.splice(index, 1); c.gold += value; c.recalc(false);
+      c.hp = Math.min(c.hp, c.maxHp); c.mana = Math.min(c.mana, c.maxMana);
+      c.undo.push({ t: 'sell', id: id, value: value, index: index });
+      return null;
+    }
+    /** Deshacer la última compra o venta (solo mientras seguís en la tienda, como en LoL). */
+    undoShop(c) {
+      if (!this.canShop(c)) return 'Tenés que estar en la base';
+      const u = c.undo.pop();
+      if (!u) return 'No hay nada para deshacer';
+      if (u.t === 'buy') {
+        const i = c.items.lastIndexOf(u.id);
+        if (i < 0) return 'No se puede deshacer';
+        c.items.splice(i, 1);
+        for (const x of u.consumed) c.items.push(x);
+        c.gold += u.cost;
+      } else {
+        if (c.gold < u.value || c.items.length >= M.MAX_ITEMS) return 'No se puede deshacer';
+        c.items.splice(Math.min(u.index, c.items.length), 0, u.id);
+        c.gold -= u.value;
+      }
+      c.recalc(false);
       c.hp = Math.min(c.hp, c.maxHp); c.mana = Math.min(c.mana, c.maxMana);
       return null;
     }
+    /** Los bots siguen su ruta de compra (componentes → intermedios → legendarios) y usan las recetas. */
     botShop(c) {
       const build = M.BOT_BUILDS[c.def.role] || M.BOT_BUILDS.Luchador;
-      while (c.items.length < M.MAX_ITEMS) {
-        const next = build[c.items.length] || build[build.length - 1];
-        if (this.buyItem(c, next)) break;
+      for (let guard = 0; guard < 12; guard++) {
+        // siguiente paso de la ruta que todavía no tiene (ni como objeto ni dentro de uno mejor)
+        const owned = c.items.slice();
+        let next = null;
+        for (const id of build) {
+          // si lo tiene tal cual, ese objeto "cubre" este paso; si está dentro de uno mejor, el paso ya está hecho
+          const k = owned.indexOf(id);
+          if (k >= 0) { owned.splice(k, 1); continue; }
+          if (owned.some(function (x) { return M.itemContains(x, id); })) continue;
+          if (M.itemById[id].boots || id === 'botas') { if (M.hasBoots(c.items) && !(M.itemById[id].from || []).some(function (f) { return f === 'botas' && c.items.indexOf('botas') >= 0; })) continue; }
+          next = id; break;
+        }
+        if (!next) return;
+        if (this.buyItem(c, next)) return;
       }
     }
 
@@ -306,6 +365,19 @@
         this.damage(null, c, 1000 * dt, 'true', { noText: true });
         if (c.dead) return;
       }
+      if (c.reviveAt && this.time >= c.reviveAt) { c.reviveAt = 0; c.hp = Math.max(c.hp, c.maxHp * 0.3); this.particles(c.x, c.y, '#b7ff5a', 20, 400); }
+      // Égida Solar: inmolación
+      if (c.passives.burn) {
+        c.burnT = (c.burnT || 0) + dt;
+        if (c.burnT >= 1) {
+          c.burnT -= 1;
+          for (const e of this.units.slice()) {
+            if (e.dead || e.team === c.team || !A.isHittable(e) || U.dist(e, c) > 325 + e.radius) continue;
+            this.damage(c, e, (15 + 1.5 * c.level) * (e.type === 'minion' || e.type === 'monster' ? 1.5 : 1), 'magic', { noText: true });
+          }
+        }
+      }
+      if (c.undo.length && !this.canShop(c)) c.undo = [];
       if (c.recalling) {
         c.recalling.t -= dt;
         if (c.recalling.t <= 0) {
@@ -505,6 +577,7 @@
 
     /** Empieza un ataque básico: el temporizador depende de la velocidad de ataque y una fracción es preparación. */
     startAttack(u, t) {
+      if (u.type === 'champion' && u.isStealthed()) u.buffs = u.buffs.filter(function (b) { return b.type !== 'stealth'; });
       const period = 1 / u.getAttackSpeed();
       u.lastAttackAt = this.time; u.attackStart = this.time; u.attackPeriod = period;
       u.attackCd = period;
@@ -527,14 +600,54 @@
       }
       if (u.ranged) {
         this.projectiles.push({
-          id: ++this.seq, kind: 'homing', x: u.x, y: u.y, target: t, source: u, crit: crit,
+          id: ++this.seq, kind: 'homing', x: u.x, y: u.y, target: t, source: u, crit: crit, basic: true,
           speed: u.projectileSpeed * (M.PACE ? M.PACE.projectile : 1), damage: dmg,
           color: u.projectileColor, size: u.type === 'tower' ? 24 : (u.type === 'champion' ? 14 : 10)
         });
+        // Pasiva "Vendaval" (Huracán): 2 rayos extra a enemigos cercanos
+        if (u.passives && u.passives.bolts) {
+          const extra = this.units.filter((e) => e !== t && !e.dead && e.team !== u.team && e.team !== 2 && (e.type === 'champion' || e.type === 'minion') &&
+            this.isVisibleTo(u.team, e) && U.dist(e, u) < u.attackRange + 250).sort(function (a, b) { return U.dist(a, u) - U.dist(b, u); }).slice(0, 2);
+          for (const e of extra) this.projectiles.push({ id: ++this.seq, kind: 'homing', x: u.x, y: u.y, target: e, source: u, crit: crit, bolt: true,
+            speed: u.projectileSpeed, damage: dmg * 0.4, color: '#bff4ff', size: 9 });
+        }
       } else {
-        const dealt = this.damage(u, t, dmg, 'physical', { crit: crit });
+        const dealt = this.damage(u, t, dmg, 'physical', { crit: crit, basic: true });
         this.lifesteal(u, dealt);
+        this.onBasicHit(u, t, dmg, crit);
         this.pushFx({ type: 'swing', x: u.x, y: u.y, angle: u.facing, r: u.radius + 45, color: u.type === 'champion' ? u.def.accent : '#ddd', life: 0.15, max: 0.15 });
+      }
+    }
+
+    /** Efectos al pegar un ataque básico: pasivas de objetos y de campeones. */
+    onBasicHit(u, t, dmg, crit) {
+      if (!u || u.type !== 'champion' || !t || t.dead) {
+        return;
+      }
+      const P = u.passives || {};
+      // Cuchilla Negra: reduce armadura (se acumula)
+      if (P.shred && t.type === 'champion') {
+        let b = t.buffs.find(function (x) { return x.type === 'armorShred' && x.shredItem; });
+        if (!b) { b = { type: 'armorShred', amount: 0, shredItem: true, stacks: 0, duration: 6 }; t.addBuff(b); }
+        b.stacks = Math.min(6, b.stacks + 1); b.amount = 0.05 * b.stacks; b.remaining = 6;
+      }
+      // Hidra: daño en área alrededor del objetivo (solo cuerpo a cuerpo)
+      if (P.cleave && !u.ranged) {
+        for (const e of this.units.slice()) {
+          if (e === t || e.dead || e.team === u.team || !A.isHittable(e)) continue;
+          if (U.dist(e, t) < 300 + e.radius) this.damage(u, e, dmg * 0.4, 'physical', { noText: !u.human });
+        }
+        this.pushFx({ type: 'ring', x: t.x, y: t.y, r0: 30, r1: 300, color: '#ff9a5a', life: 0.25, max: 0.25 });
+      }
+      // Pikachu: cada 4º ataque descarga electricidad
+      if (u.def.passive && u.def.passive.id === 'static') {
+        u.staticCount = (u.staticCount || 0) + 1;
+        if (u.staticCount >= 4) {
+          u.staticCount = 0;
+          this.damage(u, t, 30 + 0.2 * u.ap + 4 * u.level, 'magic');
+          if (!t.dead && !t.isStatic) t.addBuff({ type: 'slow', amount: 0.3, duration: 1 });
+          this.pushFx({ type: 'ring', x: t.x, y: t.y, r0: 20, r1: 140, color: '#fff15a', life: 0.3, max: 0.3 });
+        }
       }
     }
 
@@ -647,8 +760,9 @@
           const dx = t.x - p.x, dy = t.y - p.y, d = Math.hypot(dx, dy);
           const step = p.speed * dt;
           if (d <= step + t.radius * 0.5) {
-            const dealt = this.damage(p.source, t, p.damage, 'physical', { crit: p.crit });
+            const dealt = this.damage(p.source, t, p.damage, 'physical', { crit: p.crit, basic: p.basic || p.bolt });
             this.lifesteal(p.source, dealt);
+            if (p.basic) this.onBasicHit(p.source, t, p.damage, p.crit);
             this.particles(t.x, t.y, p.color, 3, 150);
             continue;
           }
@@ -709,11 +823,20 @@
       if (!t || t.dead || !t.isTargetable() || amount <= 0) return 0;
       const res = kind === 'physical' ? t.getArmor() : kind === 'magic' ? t.getMr() : 0;
       let dmg = amount * 100 / (100 + Math.max(0, res));
+      const basic = opts && opts.basic;
+      if (basic && t.passives && t.passives.tabi) dmg *= 0.88;
+      // Malla de Espinas: devuelve daño mágico al atacante
+      if (basic && t.passives && t.passives.thorns && src && !src.dead && src.type !== 'tower') {
+        const bonusArmor = Math.max(0, t.armor - M.growth(t.def.stats.armor, t.def.stats.armorPerLevel, t.level));
+        this.damage(t, src, 20 + 0.1 * bonusArmor, 'magic', { noText: !t.human && !src.human });
+      }
       const total = dmg;
       for (const b of t.buffs) {
         if (b.type === 'shield' && b.amount > 0 && dmg > 0) { const a = Math.min(b.amount, dmg); b.amount -= a; dmg -= a; }
       }
+      if (t.hasBuff('undying') && t.hp - dmg < 1) dmg = Math.max(0, t.hp - 1);
       t.hp -= dmg; t.flash = 0.1; t.lastHurt = this.time; t.lastCombat = this.time;
+      t.lastHitBy = src ? src.id : 0;
       if (src) src.lastCombat = this.time;
       if (t.recalling && dmg > 0) t.recalling = null;
       if (src && src.type === 'champion') t.lastDamagers[src.id] = this.time;
@@ -728,6 +851,18 @@
         if (t.human) this.floatText(t.x + U.rand(-30, 30), t.y - t.radius - 30, Math.round(total), '#ff6b6b', false, [t.id]);
         if (src && src.human && src !== t) this.floatText(t.x + U.rand(-30, 30), t.y - t.radius - 30, Math.round(total) + (crit ? '!' : ''),
           crit ? '#ff9f1a' : (kind === 'magic' ? '#d6a8ff' : '#ffffff'), crit, [src.id]);
+      }
+      if (t.hp <= 0 && t.type === 'champion' && t.def.passive && t.def.passive.id === 'revive' && this.time >= t.reviveReady) {
+        // Zombie: vuelve a levantarse
+        t.reviveReady = this.time + 150;
+        t.hp = 1; t.reviveAt = this.time + 2;
+        t.buffs = t.buffs.filter(function (b) { return b.type !== 'dot'; });
+        t.addBuff({ type: 'undying', amount: 1, duration: 2 });
+        t.addBuff({ type: 'stun', amount: 1, duration: 2 });
+        t.target = null; t.moveTarget = null; t.windup = null; t.dash = null; t.recalling = null;
+        this.floatText(t.x, t.y - 170, '¡Se levanta!', '#b7ff5a', true);
+        this.pushFx({ type: 'ring', x: t.x, y: t.y, r0: 20, r1: 260, color: '#b7ff5a', life: 0.8, max: 0.8 });
+        return total;
       }
       if (t.hp <= 0) { t.hp = 0; this.kill(t, src); }
       return total;
@@ -750,7 +885,7 @@
         this.particles(t.x, t.y, '#b48cff', 20, 400);
       } else if (t.type === 'champion') {
         t.deaths++;
-        t.respawnTimer = M.deathTimer(t.level, this.time);
+        t.respawnTimer = M.deathTimer(t.level, this.time) * (t.def.passive && t.def.passive.id === 'quickRespawn' ? 0.65 : 1);
         let killer = killerChamp && killerChamp.team !== t.team ? killerChamp : null;
         const assists = [];
         let latest = -1;
@@ -826,17 +961,20 @@
     for (let team = 0; team < 2; team++) {
       const mine = out.filter(function (r) { return (r.team === 1 ? 1 : 0) === team; });
       const haveRoles = mine.map(function (r) { const d = M.championById[r.defId]; return d && d.role; });
-      const missing = M.ROLES.filter(function (role) {
+      // un Asesino humano cuenta como Luchador o Mago (el que falte primero)
+      haveRoles.forEach(function (r, i) { if (r === 'Asesino') haveRoles[i] = haveRoles.indexOf('Luchador') < 0 ? 'Luchador' : 'Mago'; });
+      const missing = M.TEAM_ROLES.filter(function (role) {
         const i = haveRoles.indexOf(role); if (i >= 0) { haveRoles.splice(i, 1); return false; } return true;
       });
       while (mine.length < 5) {
         const role = missing.shift();
-        let pool = M.champions.filter(function (c) { return (!role || c.role === role) && !used[0][c.id] && !used[1][c.id]; });
+        const okRole = function (c) { return !role || c.role === role || (M.ROLE_ALT[role] || []).indexOf(c.role) >= 0; };
+        let pool = M.champions.filter(function (c) { return okRole(c) && !used[0][c.id] && !used[1][c.id]; });
         if (!pool.length) pool = M.champions.filter(function (c) { return !used[team][c.id]; });
         if (!pool.length) pool = M.champions;
         const pick = U.pick(pool);
         used[team][pick.id] = true;
-        const r = { defId: pick.id, team: team, human: false, slot: null, name: '' };
+        const r = { defId: pick.id, team: team, human: false, slot: null, name: '', lane: pick.role === 'Asesino' ? M.ROLE_LANES[role] : undefined };
         out.push(r); mine.push(r);
       }
     }
