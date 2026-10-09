@@ -5,8 +5,8 @@
 (function (M) {
   'use strict';
   const Anime = M.Anime = {
-    /** Modelos disponibles: artId → archivo y escala (metros de Blender → unidades del juego). */
-    MODELS: { 'champ:ignis': { file: 'ignis_anime.glb', scale: 100 } },
+    /** Modelos disponibles: artId → archivo, escala (metros de Blender → unidades del juego) e inclinación de la cabeza hacia la cámara (rad). */
+    MODELS: { 'champ:ignis': { file: 'ignis_anime.glb', scale: 100, headTilt: -0.42 } },
     gltf: {}, loading: {}, failed: {},
     HEAD_TILT: -0.3,
 
@@ -105,7 +105,7 @@
       for (const o of meshes) {
         const src = o.material;
         const emissive = src.emissive && (src.emissive.r + src.emissive.g + src.emissive.b) > 0.01;
-        o.material = self.toonMaterial(T, { noVivid: true, color: src.color.getHex(), emissive: emissive ? src.emissive.getHex() : undefined, emissiveIntensity: emissive ? Math.min(1.2, (src.emissiveIntensity || 1) * 0.5) : undefined });
+        o.material = self.toonMaterial(T, { noVivid: true, color: src.color.getHex(), map: src.map || undefined, emissive: emissive ? src.emissive.getHex() : undefined, emissiveIntensity: emissive ? Math.min(1.2, (src.emissiveIntensity || 1) * 0.5) : undefined });
         o.frustumCulled = false; o.castShadow = true;
         if (!emissive) self.addOutline(T, o, 0.011);
       }
@@ -119,7 +119,7 @@
         if (clip.name === 'attack' || clip.name === 'cast' || clip.name === 'death') { a.setLoop(T.LoopOnce, 1); a.clampWhenFinished = true; }
         acts[clip.name] = a;
       }
-      const MAP = { idle: 'idle', walk: 'run', attack: 'attack', cast: 'cast', dead: 'death', recall: 'recall' };
+      const MAP = { idle: 'idle', walk: 'run', attack: 'attack', cast: 'cast', dead: 'death', recall: 'recall', victory: 'victory' };
       let cur = null;
       const play = function (name, fade) {
         const a = acts[name] || acts.idle;
@@ -141,7 +141,7 @@
           else if (name === 'run') a.timeScale = Math.max(0.7, Math.min(1.6, (s.speed || 330) / 330));
           else a.timeScale = 1;
           mixer.update(Math.min(0.1, s.dt || 0.016));
-          if (headBone && name !== 'death') headBone.rotateX(Anime.HEAD_TILT);
+          if (headBone && name !== 'death') headBone.rotateX(info.headTilt != null ? info.headTilt : Anime.HEAD_TILT);
         }
       };
     }

@@ -632,7 +632,7 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
         let toon = 0, outl = 0; r.scene.traverse((o) => { if (o.isMesh && o.material && o.material.isMeshToonMaterial) toon++; if (o.userData && o.userData.isOutline) outl++; });
         return { glb: !!(v && v.model.anime), clips, toon, outl };
       });
-      check('modo anime: Ignis usa el GLB de Blender con animaciones (' + an.clips + ')', an.glb && an.clips === 'attack,cast,death,idle,recall,run');
+      check('modo anime: Ignis usa el GLB de Blender con animaciones (' + an.clips + ')', an.glb && ['attack', 'cast', 'death', 'idle', 'recall', 'run'].every((c) => an.clips.split(',').includes(c)));
       check('modo anime: materiales toon y contornos', an.toon > 50 && an.outl > 20);
     } catch (e) { check('modo anime: ' + e.message.split('\n')[0], false); }
     await pa.close(); srv.close();
