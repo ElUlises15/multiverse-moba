@@ -73,9 +73,9 @@ Los navegadores intentan conectarse **directo** (con ayuda de STUN). Cuando los 
 
 Al terminar aparecen **Volver a la sala (revancha)** —el anfitrión vuelve a la misma sala con los mismos amigos y puede empezar otra— y **Menú principal**. Todo se cierra prolijo (conexiones, simulación, escena 3D, `?sala=` de la dirección), así que se puede crear o unirse a otra sala sin recargar la página. Si el anfitrión abandona, los demás vuelven al menú con un aviso.
 
-### Modo anime (experimental, rama `anime`)
+### Estilo anime (activado de fábrica)
 
-Activalo con `?anime=1` en la dirección o en **Configuración → Gráficos → Estilo anime**. Cambia a sombreado toon (cel shading de 3 escalones con `MeshToonMaterial`), contornos negros con "casco invertido" en los campeones y colores más vivos. Ignis usa un **modelo 3D hecho en Blender** (`assets/models/ignis_anime.glb`) que se carga con `GLTFLoader` (vendorizado en `vendor/three-gltf.min.js`). Si el GLB no carga (por ejemplo, abriendo el dist con `file://`), se usa el Ignis procedural.
+Viene **activado**. Para volver al estilo clásico, desactivalo en **Configuración → Gráficos → Estilo anime** (o abrí con `?anime=0`). Cambia a sombreado toon (cel shading de 3 escalones con `MeshToonMaterial`), contornos negros con "casco invertido" en los campeones y colores más vivos. Ignis usa un **modelo 3D hecho en Blender** (`assets/models/ignis_anime.glb`) que se carga con `GLTFLoader` (vendorizado en `vendor/three-gltf.min.js`). Si el GLB no carga (por ejemplo, abriendo el dist con `file://`), se usa el Ignis procedural.
 
 **Ignis v2** (`tools/blender/ignis_anime_v2.py`, ~18 mil triángulos, GLB de ~1.2 MB):
 - Pelo en 26 mechones con forma (barridos que se afinan y se curvan, con degradé rojo → naranja → dorado) en vez de púas rígidas; flequillo corto partido y "ahoge"; pensado para que desde la cámara cenital no tape la cara.
