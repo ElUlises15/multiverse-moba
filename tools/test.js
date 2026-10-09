@@ -803,6 +803,36 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
     }
     await bA.close(); await bB.close();
   }
+  // Modo anime (experimental): Ignis GLB de Blender con esqueleto y animaciones, materiales toon
+  if (!fileArg) {
+    // el GLB se carga por http (con file:// el navegador no deja leerlo): servidor estático mínimo
+    const http = require('http'), fsx = require('fs'), px = require('path');
+    const rootDir = px.resolve(__dirname, '..');
+    const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.glb': 'model/gltf-binary', '.svg': 'image/svg+xml', '.png': 'image/png', '.mp3': 'audio/mpeg' };
+    const srv = http.createServer((req, res) => {
+      const f = px.join(rootDir, decodeURIComponent(req.url.split('?')[0]));
+      if (!f.startsWith(rootDir) || !fsx.existsSync(f) || fsx.statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; }
+      res.writeHead(200, { 'Content-Type': TYPES[px.extname(f)] || 'application/octet-stream' }); fsx.createReadStream(f).pipe(res);
+    });
+    await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+    const pa = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    watch(pa, '[anime]');
+    await pa.goto('http://127.0.0.1:' + srv.address().port + '/index.html?anime=1');
+    await pa.evaluate(() => MOBA.debug.startWith(['ignis', 'sol', 'bolt', 'bastion', 'rorik', 'pikachu', 'kaida', 'vex', 'mora', 'creeper']));
+    try {
+      await pa.waitForFunction(() => MOBA.Anime.has('champ:ignis'), null, { timeout: 20000 });
+      await pa.waitForTimeout(500);
+      const an = await pa.evaluate(() => {
+        const r = MOBA.debug.renderer, v = [...r.views.values()].find((x) => x.u.def && x.u.def.id === 'ignis');
+        const clips = MOBA.Anime.gltf['champ:ignis'].animations.map((c) => c.name).sort().join(',');
+        let toon = 0, outl = 0; r.scene.traverse((o) => { if (o.isMesh && o.material && o.material.isMeshToonMaterial) toon++; if (o.userData && o.userData.isOutline) outl++; });
+        return { glb: !!(v && v.model.anime), clips, toon, outl };
+      });
+      check('modo anime: Ignis usa el GLB de Blender con animaciones (' + an.clips + ')', an.glb && ['attack', 'cast', 'death', 'idle', 'recall', 'run'].every((c) => an.clips.split(',').includes(c)));
+      check('modo anime: materiales toon y contornos', an.toon > 50 && an.outl > 20);
+    } catch (e) { check('modo anime: ' + e.message.split('\n')[0], false); }
+    await pa.close(); srv.close();
+  }
   const peerOk = await (async () => { try { const r = await fetch('https://0.peerjs.com/peerjs/id'); return r.ok; } catch (e) { return false; } })();
   if (!skipPeer && peerOk && !fileArg) { await multiplayer('peer'); await relayOnly(); }
   else console.log('Multijugador PeerJS: no probado (' + (skipPeer ? '--sin-peer' : fileArg ? 'test del dist' : 'servidor de PeerJS inalcanzable') + ')');
