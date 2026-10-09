@@ -987,6 +987,15 @@
       this.disposed = true;
       const fn = this.settingsFn;
       M.Settings.listeners = M.Settings.listeners.filter(function (f) { return f !== fn; });
+      // liberar geometrías, materiales y texturas de la escena
+      try {
+        this.scene.traverse(function (o) {
+          if (o.geometry) o.geometry.dispose();
+          if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) { for (const k in m) { const v = m[k]; if (v && v.isTexture) v.dispose(); } m.dispose(); });
+        });
+        if (this.ghostMat) this.ghostMat.dispose();
+      } catch (e) { /* nada */ }
+      this.views.clear(); this.fxViews = []; this.pools = {};
       try { this.gl.dispose(); this.gl.forceContextLoss(); } catch (e) { /* nada */ }
     }
   }

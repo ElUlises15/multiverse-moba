@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Browser Multiverse MOBA</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -29,6 +30,7 @@
     <div id="tab-join" class="mode-tab hidden">
       <p>Escribí el código que te pasó quien creó la sala.</p>
       <input id="join-code" maxlength="8" placeholder="CÓDIGO" autocomplete="off"> <button id="join-room-btn" class="big-btn">Unirme</button>
+      <div id="join-status" class="join-status hidden"><span id="join-status-text"></span> <button id="join-retry" class="hidden">Reintentar</button></div>
     </div>
     <div class="net-options"><label><input type="checkbox" id="local-mode"> Modo local (pestañas de este mismo navegador, sin internet)</label>
       <span id="net-note"></span> <span id="menu-msg"></span></div>
@@ -59,6 +61,7 @@
       <div class="lobby-actions"><span id="lobby-count"></span><button id="lobby-start" class="big-btn">¡Empezar partida!</button>
         <span id="lobby-wait">Esperando a que el anfitrión empiece…</span><button id="lobby-leave">Salir</button></div>
     </header>
+    <div id="lobby-info"><span id="lobby-status"></span><span id="lobby-net"></span></div>
     <div id="lobby-teams">
       <div class="team-col blue"><h3>Equipo Azul</h3><div id="lobby-team-blue"></div><button id="lobby-blue">Unirme al Azul</button></div>
       <div class="team-col red"><h3>Equipo Rojo</h3><div id="lobby-team-red"></div><button id="lobby-red">Unirme al Rojo</button></div>

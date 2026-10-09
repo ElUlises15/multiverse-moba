@@ -15,57 +15,164 @@
   Net.cleanCode = function (c) { return String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8); };
   Net.peerAvailable = function () { return typeof window.peerjs !== 'undefined' && !!window.peerjs.Peer; };
 
+  // ======================= Servidores ICE (STUN / TURN) =======================
+  /* WebRTC intenta primero una conexión DIRECTA entre los navegadores (con ayuda de STUN).
+   * Si los routers no lo permiten (NAT simétrico, CGNAT de muchos proveedores, redes de oficina),
+   * hace falta un RELÉ (TURN) que pase los datos. El TURN que traía PeerJS por defecto
+   * (eu-0/us-0.turn.peerjs.com) ya no existe, por eso sin esto muchas conexiones no arrancaban nunca.
+   *
+   * ¿Querés usar tu propio TURN (recomendado si lo publicás en serio)? Agregalo en `servers`, por ejemplo:
+   *   { urls: ['turn:mi-turn.example.com:3478', 'turns:mi-turn.example.com:443?transport=tcp'], username: 'yo', credential: 'clave' }
+   * Servicios con plan gratis que te dan usuario y clave fijos: Metered, ExpressTURN, Twilio (de pago), o tu propio coturn. */
+  Net.ICE = {
+    servers: [
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+      // TURN público gratuito (turn.evan-brass.net, sin registro): UDP, TCP y TLS por el puerto 443
+      { urls: ['turn:turn.evan-brass.net:3478', 'turn:turn.evan-brass.net:3478?transport=tcp', 'turns:turn.evan-brass.net:443?transport=tcp'],
+        username: 'user', credential: 'password' }
+    ],
+    // Servicios que entregan credenciales TURN temporales sin cuenta (se piden al conectar; si fallan, se sigue sin ellos)
+    credentialUrls: ['https://turn.elixir-webrtc.org/?service=turn&username=mvmoba'],
+    fetchTimeoutMs: 3500
+  };
+  let iceCache = null;
+  /** Arma la configuración ICE: servidores fijos + credenciales temporales. Con ?relay=1 fuerza usar solo el relé (para probar TURN). */
+  Net.iceConfig = function () {
+    const relayOnly = /[?&]relay=1\b/.test(location.search);
+    if (iceCache && iceCache.until > Date.now()) return Promise.resolve({ iceServers: iceCache.servers, iceTransportPolicy: relayOnly ? 'relay' : 'all' });
+    const fetchOne = function (url) {
+      if (typeof fetch !== 'function' || typeof AbortController === 'undefined') return Promise.resolve(null);
+      const ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, Net.ICE.fetchTimeoutMs);
+      return fetch(url, { method: 'POST', signal: ctl.signal }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { clearTimeout(t); return j && j.uris && j.username ? { urls: j.uris, username: j.username, credential: j.password, ttl: j.ttl || 600 } : null; })
+        .catch(function () { clearTimeout(t); return null; });
+    };
+    return Promise.all(Net.ICE.credentialUrls.map(fetchOne)).then(function (extra) {
+      const got = extra.filter(Boolean);
+      const servers = Net.ICE.servers.concat(got.map(function (e) { return { urls: e.urls, username: e.username, credential: e.credential }; }));
+      const ttl = got.length ? Math.min.apply(null, got.map(function (e) { return e.ttl; })) : 600;
+      iceCache = { servers: servers, until: Date.now() + Math.max(60, ttl - 60) * 1000 };
+      return { iceServers: servers, iceTransportPolicy: relayOnly ? 'relay' : 'all' };
+    });
+  };
+  /** Qué tipo de conexión quedó: 'relé TURN' o 'directa'. Devuelve una promesa con { kind, text }. */
+  Net.describeConnection = function (pc) {
+    if (!pc || !pc.getStats) return Promise.resolve(null);
+    return pc.getStats().then(function (stats) {
+      let pair = null; const byId = {};
+      stats.forEach(function (s) { byId[s.id] = s; });
+      stats.forEach(function (s) { if (s.type === 'transport' && s.selectedCandidatePairId) pair = byId[s.selectedCandidatePairId]; });
+      if (!pair) stats.forEach(function (s) { if (s.type === 'candidate-pair' && (s.selected || s.nominated) && s.state === 'succeeded') pair = pair || s; });
+      if (!pair) return null;
+      const l = byId[pair.localCandidateId] || {}, r = byId[pair.remoteCandidateId] || {};
+      const relay = l.candidateType === 'relay' || r.candidateType === 'relay';
+      const rtt = pair.currentRoundTripTime != null ? Math.round(pair.currentRoundTripTime * 1000) + ' ms' : '';
+      return { kind: relay ? 'relay' : 'direct', text: (relay ? 'por relé TURN' : 'directa P2P') + (rtt ? ' · ' + rtt : ''), local: l.candidateType, remote: r.candidateType };
+    }).catch(function () { return null; });
+  };
+
   // ======================= Transportes =======================
-  /** Anfitrión con PeerJS. handlers: { ready(code), join(id), message(id, msg), leave(id), error(text) } */
+  /** Anfitrión con PeerJS. handlers: { ready(code), join(id), message(id, msg), leave(id), error(text), status(text) } */
   function PeerHost(code, h) {
     const self = this;
-    this.conns = {};
-    this.kind = 'peer';
-    const peer = this.peer = new window.peerjs.Peer(Net.PREFIX + code, { debug: 0 });
-    peer.on('open', function () { h.ready(code); });
-    peer.on('connection', function (conn) {
-      conn.on('open', function () { self.conns[conn.peer] = conn; h.join(conn.peer); });
-      conn.on('data', function (d) { h.message(conn.peer, typeof d === 'string' ? JSON.parse(d) : d); });
-      conn.on('close', function () { delete self.conns[conn.peer]; h.leave(conn.peer); });
-      conn.on('error', function () { delete self.conns[conn.peer]; h.leave(conn.peer); });
+    this.conns = {}; this.kind = 'peer'; this.closed = false; this.code = code;
+    Net.iceConfig().then(function (cfg) {
+      if (self.closed) return;
+      const peer = self.peer = new window.peerjs.Peer(Net.PREFIX + code, { debug: 0, config: cfg });
+      let wasOpen = false;
+      peer.on('open', function () { if (!wasOpen) { wasOpen = true; h.ready(code); } else if (h.status) h.status('Reconectado con el servidor. La sala sigue abierta.'); });
+      peer.on('connection', function (conn) {
+        conn.on('open', function () { self.conns[conn.peer] = conn; h.join(conn.peer); });
+        conn.on('data', function (d) { h.message(conn.peer, typeof d === 'string' ? JSON.parse(d) : d); });
+        conn.on('close', function () { if (self.conns[conn.peer]) { delete self.conns[conn.peer]; h.leave(conn.peer); } });
+        conn.on('error', function () { if (self.conns[conn.peer]) { delete self.conns[conn.peer]; h.leave(conn.peer); } });
+      });
+      // Si se corta la conexión con el servidor de señalización, la sala deja de ser "encontrable": reconectar
+      peer.on('disconnected', function () {
+        if (self.closed || peer.destroyed) return;
+        if (h.status) h.status('Se cortó la conexión con el servidor de salas. Reconectando…');
+        let tries = 0;
+        const again = function () { if (self.closed || peer.destroyed || !peer.disconnected) return; tries++; try { peer.reconnect(); } catch (e) { /* nada */ } if (tries < 20) setTimeout(again, Math.min(15000, 1500 * tries)); };
+        setTimeout(again, 500);
+      });
+      peer.on('error', function (e) {
+        const t = e && e.type;
+        if (t === 'peer-unavailable') return;                                 // no aplica al anfitrión
+        if ((t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') && wasOpen) return;   // lo maneja 'disconnected'
+        h.error(Net.peerError(e));
+      });
     });
-    peer.on('error', function (e) { h.error(Net.peerError(e)); });
     window.addEventListener('pagehide', function () { self.close(); });
   }
-  PeerHost.prototype.send = function (id, msg) { const c = this.conns[id]; if (c && c.open) c.send(JSON.stringify(msg)); };
-  PeerHost.prototype.close = function () { try { this.peer.destroy(); } catch (e) { /* nada */ } };
+  PeerHost.prototype.send = function (id, msg) { if (this.closed) return; const c = this.conns[id]; if (c && c.open) c.send(JSON.stringify(msg)); };
+  PeerHost.prototype.close = function () { this.closed = true; try { if (this.peer) this.peer.destroy(); } catch (e) { /* nada */ } };
+  PeerHost.prototype.diag = function (id) { const c = this.conns[id]; return Net.describeConnection(c && c.peerConnection); };
 
-  /** Cliente con PeerJS. handlers: { open(), message(msg), close(), error(text) } */
+  Net.JOIN_TIMEOUT = 15000;
+  /** Cliente con PeerJS. handlers: { open(), message(msg), close(), error(text, opts), stage(text) } */
   function PeerClient(code, h) {
     const self = this;
-    this.kind = 'peer';
-    const peer = this.peer = new window.peerjs.Peer({ debug: 0 });
-    let opened = false;
-    peer.on('open', function () {
-      const conn = self.conn = peer.connect(Net.PREFIX + code, { reliable: true, serialization: 'raw' });
-      conn.on('open', function () { opened = true; h.open(); });
-      conn.on('data', function (d) { h.message(typeof d === 'string' ? JSON.parse(d) : d); });
-      conn.on('close', function () { h.close(); });
-      conn.on('error', function (e) { h.error(Net.peerError(e)); });
+    this.kind = 'peer'; this.closed = false;
+    let opened = false, failed = false;
+    const stage = function (t) { if (!opened && !failed && h.stage) h.stage(t); };
+    const fail = function (text) {
+      if (opened || failed || self.closed) return;
+      failed = true; clearTimeout(self.timer);
+      self.close();
+      h.error(text, { retry: true });
+    };
+    stage('1/3 · Contactando el servidor de salas…');
+    this.timer = setTimeout(function () {
+      fail('No se pudo conectar con la sala ' + code + ' en ' + Math.round(Net.JOIN_TIMEOUT / 1000) + ' s. Puede ser que el anfitrión haya cerrado la pestaña o ' +
+        'se haya quedado sin internet, o que alguna de las dos redes bloquee las conexiones entre navegadores (WebRTC). Probá de nuevo; si sigue igual, que el anfitrión cree una sala nueva.');
+    }, Net.JOIN_TIMEOUT);
+    Net.iceConfig().then(function (cfg) {
+      if (self.closed) return;
+      const peer = self.peer = new window.peerjs.Peer({ debug: 0, config: cfg });
+      peer.on('open', function () {
+        stage('2/3 · Buscando la sala ' + code + '…');
+        const conn = self.conn = peer.connect(Net.PREFIX + code, { reliable: true, serialization: 'raw' });
+        const pc = conn.peerConnection;
+        if (pc && pc.addEventListener) {
+          pc.addEventListener('signalingstatechange', function () { if (pc.signalingState === 'stable' && pc.remoteDescription) stage('3/3 · Sala encontrada: estableciendo la conexión con el anfitrión…'); });
+          pc.addEventListener('iceconnectionstatechange', function () {
+            if (pc.iceConnectionState === 'failed') fail('Se encontró la sala, pero no se pudo establecer la conexión entre los dos navegadores (ni directa ni por relé). Alguna de las redes bloquea WebRTC. Probá con otra red (por ejemplo, datos del celular) o de nuevo en un rato.');
+          });
+        }
+        conn.on('open', function () {
+          opened = true; clearTimeout(self.timer); h.open();
+        });
+        conn.on('data', function (d) { h.message(typeof d === 'string' ? JSON.parse(d) : d); });
+        conn.on('close', function () { if (opened) h.close(); });
+        conn.on('error', function (e) { if (opened) h.error(Net.peerError(e)); else fail(Net.peerError(e)); });
+      });
+      peer.on('disconnected', function () { if (opened && !self.closed && !peer.destroyed) { try { peer.reconnect(); } catch (e) { /* nada */ } } });
+      peer.on('error', function (e) {
+        const t = e && e.type;
+        if (t === 'peer-unavailable') { fail('La sala ' + code + ' no existe o el anfitrión cerró la pestaña. Revisá el código o pedile un link nuevo.'); return; }
+        if (opened) { if (t !== 'network' && t !== 'socket-error' && t !== 'socket-closed' && t !== 'server-error') h.error(Net.peerError(e)); return; }
+        fail(Net.peerError(e));
+      });
     });
     window.addEventListener('pagehide', function () { self.close(); });
-    peer.on('error', function (e) { h.error(opened ? Net.peerError(e) : (e && e.type === 'peer-unavailable' ? 'No existe una sala con ese código.' : Net.peerError(e))); });
   }
-  PeerClient.prototype.send = function (msg) { if (this.conn && this.conn.open) this.conn.send(JSON.stringify(msg)); };
-  PeerClient.prototype.close = function () { try { this.peer.destroy(); } catch (e) { /* nada */ } };
+  PeerClient.prototype.send = function (msg) { if (this.closed) return; if (this.conn && this.conn.open) this.conn.send(JSON.stringify(msg)); };
+  PeerClient.prototype.close = function () { this.closed = true; clearTimeout(this.timer); try { if (this.peer) this.peer.destroy(); } catch (e) { /* nada */ } };
+  PeerClient.prototype.diag = function () { return Net.describeConnection(this.conn && this.conn.peerConnection); };
   Net.peerError = function (e) {
     const t = e && e.type;
     if (t === 'unavailable-id') return 'Ese código de sala ya está en uso. Probá de nuevo.';
-    if (t === 'peer-unavailable') return 'No existe una sala con ese código (o el anfitrión se fue).';
-    if (t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') return 'No se pudo conectar con el servidor de PeerJS. ¿Hay internet? Podés probar el modo local (misma compu).';
+    if (t === 'peer-unavailable') return 'La sala no existe o el anfitrión cerró la pestaña.';
+    if (t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') return 'No se pudo conectar con el servidor de salas (PeerJS). ¿Hay internet? Podés probar el modo local (misma compu).';
     if (t === 'browser-incompatible') return 'Este navegador no soporta WebRTC.';
+    if (t === 'webrtc' || t === 'negotiation-failed') return 'No se pudo establecer la conexión WebRTC (alguna red la bloquea).';
     return 'Error de conexión: ' + (t || (e && e.message) || e);
   };
 
   /** Transporte local con BroadcastChannel (pestañas del mismo navegador). */
   function LocalHost(code, h) {
     const self = this;
-    this.kind = 'local'; this.peers = {};
+    this.kind = 'local'; this.peers = {}; this.conns = this.peers;
     const ch = this.ch = new BroadcastChannel(Net.PREFIX + code);
     ch.onmessage = function (ev) {
       const m = ev.data;
@@ -73,17 +180,22 @@
       if (m.type === 'hello') { self.peers[m.from] = performance.now(); ch.postMessage({ to: m.from, type: 'welcome' }); h.join(m.from); }
       else if (m.type === 'bye') { if (self.peers[m.from]) { delete self.peers[m.from]; h.leave(m.from); } }
       else if (self.peers[m.from]) { self.peers[m.from] = performance.now(); if (m.type === 'data') h.message(m.from, m.data); }
+      else if (m.type === 'ping' || m.type === 'data') ch.postMessage({ to: m.from, type: 'closed' });   // lo habíamos dado por ido: que se entere
     };
     // sin noticias de una pestaña en 6 s = se fue (por si se cerró sin avisar)
+    let lastWatch = performance.now();
     this.watch = setInterval(function () {
       const now = performance.now();
-      for (const id in self.peers) if (now - self.peers[id] > 6000) { delete self.peers[id]; h.leave(id); }
+      // si fue ESTA pestaña la que estuvo trabada (o en segundo plano), no es culpa de los demás
+      if (now - lastWatch > 3000) for (const id in self.peers) self.peers[id] = now;
+      lastWatch = now;
+      for (const id in self.peers) if (now - self.peers[id] > 8000) { delete self.peers[id]; h.leave(id); }
     }, 1000);
     this.onHide = function () { self.close(); };
     window.addEventListener('pagehide', this.onHide);
     setTimeout(function () { h.ready(code); }, 0);
   }
-  LocalHost.prototype.send = function (id, msg) { this.ch.postMessage({ to: id, type: 'data', data: msg }); };
+  LocalHost.prototype.send = function (id, msg) { if (this.closed) return; this.ch.postMessage({ to: id, type: 'data', data: msg }); };
   LocalHost.prototype.close = function () {
     if (this.closed) return;
     this.closed = true; clearInterval(this.watch); window.removeEventListener('pagehide', this.onHide);
@@ -106,9 +218,9 @@
     this.ping = setInterval(function () { if (open) ch.postMessage({ to: 'host', from: self.id, type: 'ping' }); }, 1000);
     this.onHide = function () { self.close(); };
     window.addEventListener('pagehide', this.onHide);
-    setTimeout(function () { if (!open && !self.closed) h.error('No existe una sala local con ese código (abrila en otra pestaña de este navegador).'); }, 2500);
+    setTimeout(function () { if (!open && !self.closed) h.error('No existe una sala local con ese código (abrila en otra pestaña de este navegador).', { retry: true }); }, 2500);
   }
-  LocalClient.prototype.send = function (msg) { this.ch.postMessage({ to: 'host', from: this.id, type: 'data', data: msg }); };
+  LocalClient.prototype.send = function (msg) { if (this.closed) return; this.ch.postMessage({ to: 'host', from: this.id, type: 'data', data: msg }); };
   LocalClient.prototype.close = function () {
     if (this.closed) return;
     this.closed = true; clearInterval(this.ping); window.removeEventListener('pagehide', this.onHide);
@@ -385,6 +497,7 @@
       delete this.clients[id];
     }
     step(dt) {
+      if (this.closed) return;
       this.sendTimer -= dt;
       if (this.sendTimer > 0) return;
       this.sendTimer = 1 / Net.SNAPSHOT_HZ;
@@ -398,7 +511,7 @@
         this.transport.send(id, { k: 's', s: s, e: ev });
       }
     }
-    close() { this.transport.close(); }
+    close() { this.closed = true; this.transport.close(); }
   }
   /** Cliente: manda órdenes y dibuja la réplica interpolada. */
   class ClientSession {

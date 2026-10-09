@@ -511,17 +511,104 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
         await cli.waitForTimeout(800);
         await shot('07-cliente-online.png', cli);
       }
+
+      // ---------- Después de la partida: revancha en la misma sala y sala nueva, sin recargar ----------
+      if (mode === 'peer') {
+        const dg = await cli.evaluate(() => MOBA.Lobby.transport.diag());
+        check(tag + ': diagnóstico de conexión (directa o relé) disponible', !!(dg && dg.kind));
+        console.log('Conexión normal:', JSON.stringify(dg));
+      }
+      for (let i = 0; i < 300; i++) { if (await host.evaluate(() => { MOBA.debug.simulate(20); return MOBA.debug.game.over; })) break; await host.waitForTimeout(30); }
+      await host.waitForSelector('#endscreen [data-end="0"]', { timeout: 20000 });
+      await cli.waitForSelector('#endscreen [data-end="0"]', { timeout: 20000 });
+      const endBtns = await Promise.all([host, cli].map((pg) => pg.$$eval('#endscreen [data-end]', (b) => b.map((x) => x.textContent))));
+      check(tag + ': pantalla final con "Volver a la sala" y "Menú principal" (anfitrión y cliente)', /Volver a la sala/.test(endBtns[0][0]) && /Menú principal/.test(endBtns[0][1]) && /Volver a la sala/.test(endBtns[1][0]) && /Menú principal/.test(endBtns[1][1]));
+      await cli.click('#endscreen [data-end="0"]');      // el cliente vuelve primero: espera al anfitrión
+      await cli.waitForFunction(() => !document.getElementById('lobby-screen').classList.contains('hidden') && /Esperando a que el anfitrión vuelva/.test(document.getElementById('lobby-wait').textContent), null, { timeout: 10000 });
+      await host.click('#endscreen [data-end="0"]');
+      await host.waitForFunction(() => !document.getElementById('lobby-screen').classList.contains('hidden') && !MOBA.debug.session && !MOBA.Lobby.session, null, { timeout: 10000 });
+      await cli.waitForFunction(() => /empiece/.test(document.getElementById('lobby-wait').textContent) && !MOBA.debug.session && MOBA.Lobby.state.players.length === 2, null, { timeout: 10000 });
+      check(tag + ': revancha: los dos vuelven a la misma sala sin recargar', true);
+      await host.click('#lobby-start');
+      await cli.waitForFunction(() => MOBA.debug.session && !MOBA.debug.session.local && MOBA.debug.game.units.length > 20 && !MOBA.debug.game.over, null, { timeout: 20000 });
+      const re = await cli.evaluate(() => { const p = MOBA.debug.game.player; return { def: p.def.id, team: p.team, canvases: document.querySelectorAll('#game-canvas').length }; });
+      check(tag + ': la revancha arranca y el cliente vuelve a controlar a Vex', re.def === 'vex' && re.team === 1 && re.canvases === 1);
+      // el anfitrión abandona a mitad de partida: el cliente vuelve al menú con un aviso
+      await host.keyboard.press('Escape');
+      await host.click('#quit-btn');
+      await host.waitForFunction(() => !document.getElementById('select-screen').classList.contains('hidden') && !MOBA.Lobby.transport && !MOBA.debug.session, null, { timeout: 10000 });
+      await cli.waitForFunction(() => !document.getElementById('select-screen').classList.contains('hidden') && !MOBA.debug.session && !MOBA.Lobby.state, null, { timeout: 20000 });
+      check(tag + ': si el anfitrión abandona, el cliente vuelve al menú con aviso', /anfitrión/.test(await cli.textContent('#menu-msg')));
+      // sala nueva y el amigo se une, sin recargar ninguna de las dos páginas
+      await host.click('#mode-host');
+      await host.click('#create-room-btn');
+      await host.waitForFunction((old) => { const c = document.getElementById('lobby-code').textContent; return /^[A-Z0-9]{5}$/.test(c) && c !== old && !document.getElementById('lobby-screen').classList.contains('hidden'); }, code, { timeout: 25000 });
+      const code2 = await host.textContent('#lobby-code');
+      check(tag + ': el anfitrión muestra "Esperando jugadores…" con el código', (await host.textContent('#lobby-status')).includes('Esperando jugadores') && (await host.textContent('#lobby-status')).includes(code2));
+      check(tag + ': el código viejo se sacó de la dirección', !/sala=/.test(await cli.evaluate(() => location.search)));
+      await cli.click('#mode-join');
+      await cli.fill('#join-code', code2);
+      await cli.click('#join-room-btn');
+      await cli.waitForFunction(() => !document.getElementById('lobby-screen').classList.contains('hidden') && MOBA.Lobby.state && MOBA.Lobby.state.players.length === 2, null, { timeout: 25000 });
+      await host.waitForFunction(() => MOBA.Lobby.state.players.length === 2, null, { timeout: 10000 });
+      check(tag + ': sala nueva ' + code2 + ' después de la partida: el amigo entra sin recargar', true);
+      await cli.click('#lobby-red');
+      await cli.waitForTimeout(300);
+      await cli.click('#lobby-grid .champ-card[data-id="vex"]');
+      await host.waitForFunction(() => { const p = MOBA.Lobby.state.players; return p.length === 2 && p[1].champ === 'vex' && p[1].team === 1; }, null, { timeout: 10000 });
+      await host.click('#lobby-start');
+      await cli.waitForFunction(() => MOBA.debug.session && !MOBA.debug.session.local && MOBA.debug.game.units.length > 20, null, { timeout: 20000 });
+      check(tag + ': partida nueva en la sala nueva', await cli.evaluate(() => MOBA.debug.game.player.def.id === 'vex'));
       await cli.close();
       await host.waitForFunction(() => { const c = MOBA.debug.game.champions.find((c) => c.def.id === 'vex' && c.team === 1); return !c.human && !!c.ai; }, null, { timeout: 15000 });
       check(tag + ': si el amigo se va, un bot toma su campeón', true);
     } catch (e) {
       check(tag + ': ' + e.message.split('\n')[0], false);
+      const st = (pg) => pg.evaluate(() => ({ scr: ['select-screen', 'lobby-screen', 'game-screen'].filter((i) => !document.getElementById(i).classList.contains('hidden')), role: MOBA.Lobby.role, sess: !!MOBA.debug.session, over: !!(MOBA.debug.game && MOBA.debug.game.over), players: MOBA.Lobby.state && MOBA.Lobby.state.players.map((p) => p.id), wait: document.getElementById('lobby-wait').textContent, msg: document.getElementById('menu-msg').textContent, end: !!document.querySelector('#endscreen [data-end]') })).catch((x) => x.message);
+      console.log('Estado al fallar:', JSON.stringify({ host: await st(host), cli: await st(cli) }));
     }
     await host.close();
     if (bB !== browser) await bB.close(); else await ctxA.close();
   }
+
+  /** Solo por relé TURN (?relay=1): dos navegadores separados, sin conexión directa posible. */
+  async function relayOnly() {
+    const tag = 'PeerJS solo relé TURN (?relay=1)';
+    const bA = await chromium.launch({ args: ARGS }), bB = await chromium.launch({ args: ARGS });
+    const host = await (await bA.newContext()).newPage(), cli = await (await bB.newContext()).newPage();
+    watch(host, '[relé anfitrión]'); watch(cli, '[relé cliente]');
+    try {
+      await host.goto(url + '?relay=1');
+      await host.click('#mode-host');
+      await host.click('#create-room-btn');
+      await host.waitForFunction(() => /^[A-Z0-9]{5}$/.test(document.getElementById('lobby-code').textContent), null, { timeout: 25000 });
+      const code = await host.textContent('#lobby-code');
+      await cli.goto(url + '?relay=1&sala=' + code);
+      await cli.click('#join-room-btn');
+      await cli.waitForFunction(() => !document.getElementById('lobby-screen').classList.contains('hidden'), null, { timeout: 30000 });
+      const d = await cli.evaluate(() => MOBA.Lobby.transport.diag());
+      console.log('Conexión solo relé:', JSON.stringify(d));
+      check(tag + ': el amigo entra a la sala pasando por el relé TURN', !!d && d.kind === 'relay');
+      await host.waitForFunction(() => /relé/.test(document.getElementById('lobby-net').textContent), null, { timeout: 8000 });
+      check(tag + ': el diagnóstico de la sala muestra "por relé TURN"', true);
+      await host.click('#lobby-start');
+      await cli.waitForFunction(() => MOBA.debug.session && MOBA.debug.game.units.length > 20, null, { timeout: 30000 });
+      check(tag + ': la partida arranca y llegan las fotos por el relé', true);
+      // código inexistente: error claro y botón Reintentar
+      await cli.evaluate(() => MOBA.Lobby.toMenu());
+      await cli.click('#mode-join');
+      await cli.fill('#join-code', 'ZZZZ9');
+      await cli.click('#join-room-btn');
+      await cli.waitForFunction(() => { const b = document.getElementById('join-status'); return b.classList.contains('error'); }, null, { timeout: 20000 });
+      const err = await cli.textContent('#join-status-text');
+      check(tag + ': sala inexistente → "no existe o el anfitrión cerró la pestaña" con Reintentar', /no existe o el anfitrión cerró la pestaña/.test(err) && await cli.isVisible('#join-retry'));
+    } catch (e) {
+      check(tag + ': ' + e.message.split('\n')[0], false);
+    }
+    await bA.close(); await bB.close();
+  }
   const peerOk = await (async () => { try { const r = await fetch('https://0.peerjs.com/peerjs/id'); return r.ok; } catch (e) { return false; } })();
-  if (!skipPeer && peerOk && !fileArg) await multiplayer('peer');
+  if (!skipPeer && peerOk && !fileArg) { await multiplayer('peer'); await relayOnly(); }
   else console.log('Multijugador PeerJS: no probado (' + (skipPeer ? '--sin-peer' : fileArg ? 'test del dist' : 'servidor de PeerJS inalcanzable') + ')');
   await multiplayer('local');
 

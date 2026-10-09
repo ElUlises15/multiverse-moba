@@ -18,11 +18,27 @@
 
   function me() { return world ? world.player : null; }
 
-  function showSelect() {
-    if (renderer) { renderer.dispose(); }
+  /** Cierra la vista de la partida: renderer (y su escena), HUD, bucle, entradas y pantallas.
+   *  No toca la conexión de red (eso lo maneja MOBA.Lobby). */
+  function teardownView() {
+    if (world) world.onGameOver = null;
+    if (renderer) { try { renderer.dispose(); } catch (e) { /* nada */ } }
     if (hud && hud.destroy) hud.destroy();
-    session = null; world = null; renderer = null; hud = null;
+    if (renderer) {
+      // canvas nuevo para la próxima partida (el contexto WebGL viejo queda descartado)
+      const old = $('game-canvas'), fresh = old.cloneNode(false);
+      old.parentNode.replaceChild(fresh, old);
+    }
+    session = null; world = null; renderer = null; hud = null; M.game = null;
+    stopBackgroundTicker();
+    acc = 0; attackArmed = false; aiming = null; aimNormal = false; pingHeld = false; spaceHeld = false; rightHeld = false;
+    for (const k in keysPan) keysPan[k] = false;
+    ['endscreen', 'pause', 'shop', 'scoreboard', 'death-overlay', 'tooltip'].forEach(function (id) { const el = $(id); if (el) { el.classList.add('hidden'); if (id === 'endscreen') el.innerHTML = ''; } });
     $('game-screen').classList.add('hidden');
+  }
+
+  function showSelect() {
+    teardownView();
     $('lobby-screen').classList.add('hidden');
     $('select-screen').classList.remove('hidden');
     M.SelectScreen.init({ onPlay: startSolo });
@@ -48,8 +64,9 @@
     if (M.Audio) M.Audio.setScene('match');
     hud = new M.HUD(session, renderer);
     s.onNotice = function (t) { if (hud) hud.showNotice(t); };
+    const myWorld = world;
     world.onGameOver = function (winner) {
-      setTimeout(function () { if (hud) hud.showEnd(winner, function () { M.Lobby.reset(); showSelect(); }); }, 1500);
+      setTimeout(function () { if (hud && world === myWorld) hud.showEnd(winner, M.Lobby.endButtons()); }, 1500);
     };
     M.game = world;
     acc = 0; attackArmed = false; setAiming(null); lastCO = null;
@@ -269,7 +286,7 @@
     });
     window.addEventListener('resize', function () { if (renderer) renderer.resize(); });
     $('resume-btn').onclick = function () { togglePause(false); };
-    $('quit-btn').onclick = function () { togglePause(false); M.Lobby.reset(); showSelect(); };
+    $('quit-btn').onclick = function () { togglePause(false); M.Lobby.toMenu(); };
     $('pause-settings-btn').onclick = function () { M.SettingsUI.open(); };
     $('hud-gear').onclick = function () { openSettings(); };
     $('menu-gear').onclick = function () { M.SettingsUI.open(); };
@@ -312,6 +329,7 @@
   /** Si el anfitrión pone la pestaña en segundo plano, el navegador frena requestAnimationFrame.
    *  Para que la partida no se congele para los demás, un Worker marca el ritmo y la simulación sigue. */
   let bgWorker = null, lastBg = 0;
+  function stopBackgroundTicker() { if (bgWorker) { try { bgWorker.terminate(); } catch (e) { /* nada */ } bgWorker = null; } }
   function startBackgroundTicker() {
     if (bgWorker || typeof Worker === 'undefined') return;
     try {
@@ -357,7 +375,7 @@
     requestAnimationFrame(frame);
   }
 
-  M.App = { showSelect: showSelect, startSolo: startSolo, startHosted: startHosted, startClient: startClient,
+  M.App = { showSelect: showSelect, teardownView: teardownView, startSolo: startSolo, startHosted: startHosted, startClient: startClient,
     notice: function (t) { if (hud) hud.showNotice(t); } };
 
   // API de depuración (usada por los tests)
@@ -368,7 +386,7 @@
       const roster = ids.map(function (id, i) { return { defId: id, team: i < 5 ? 0 : 1, human: i === 0, slot: i === 0 ? 'local' : null, name: i === 0 ? 'Vos' : '' }; });
       return startView(new M.Net.LocalSession(new M.Game({ roster: roster, localSlot: 'local' })));
     },
-    simulate: function (seconds) { if (!session || !session.local) return; const g = session.game, n = Math.round(seconds / STEP), was = g.paused; g.paused = false; for (let i = 0; i < n && !g.over; i++) { g.update(STEP); if (i % 3 === 0) session.step(STEP * 3); } g.paused = was; },
+    simulate: function (seconds) { if (!session || !session.local) return; const g = session.game, n = Math.round(seconds / STEP), was = g.paused; g.paused = false; for (let i = 0; i < n && !g.over; i++) g.update(STEP); g.paused = was; session.step(1); },
     cast: function (slot, x, y) { return !cmd({ t: 'cast', s: slot, x: x, y: y }); },
     cmd: function (c) { return cmd(c); },
     get game() { return world; },

@@ -262,3 +262,15 @@ table.keys td { padding: 2px 3px; border-bottom: 1px solid #1a2440; }
 .inv-slot img { width: 44px; height: 44px; border-radius: 5px; cursor: pointer; }
 .inv-slot button { font-size: 10px; padding: 1px 4px; background: #4a2a2a; color: #ffd0d0; border: 1px solid #a05050; border-radius: 4px; cursor: pointer; }
 .inv-slot button:disabled { opacity: 0.4; }
+/* Conexión: estado al unirse, estado de la sala y diagnóstico */
+.join-status { margin-top: 10px; padding: 8px 12px; border-radius: 8px; background: #13203a; border: 1px solid #2f4a7a; color: #bfe0ff; font-size: 14px; max-width: 760px; }
+.join-status.error { background: #2a1418; border-color: #a04a55; color: #ffc4c4; }
+.join-status.hidden { display: none; }
+#join-retry { margin-left: 8px; background: #2a3658; color: #fff; border: 1px solid #4a6aa8; border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+#lobby-info { display: flex; gap: 16px; justify-content: space-between; padding: 4px 16px; font-size: 13px; color: #9fd4ff; min-height: 18px; }
+#lobby-status.warn { color: #ffcf6a; font-weight: bold; }
+#lobby-net { color: #8fa0c0; }
+#lobby-net[data-kind="relay"] { color: #ffcf6a; }
+#lobby-net[data-kind="direct"] { color: #7dff9a; }
+.end-note { color: #ffcf6a; margin: 6px 0; min-height: 4px; }
+.end-btns { display: flex; gap: 10px; justify-content: center; }

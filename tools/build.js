@@ -15,6 +15,8 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) => {
 // La música NO se embebe (pesa varios MB): el archivo único la busca en ../assets/music/ (la carpeta del repo).
 // Si no la encuentra (por ejemplo, si copiás solo el .html), usa la música generada por el juego.
 html = html.replace('<script>/* assets/music/tracks.js */', '<script>window.MOBA = window.MOBA || {}; window.MOBA.MUSIC_BASE = "../assets/music/";</script>\n<script>/* assets/music/tracks.js */');
+const fav = fs.readFileSync(path.join(root, 'favicon.svg'));
+html = html.replace('href="favicon.svg"', 'href="data:image/svg+xml;base64,' + fav.toString('base64') + '"');
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 const out = path.join(root, 'dist', 'multiverse-moba.html');
 fs.writeFileSync(out, html);

@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Browser Multiverse MOBA</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMzhhM2ZmIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjZmY0YTRhIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMwZDE0MjYiLz48cGF0aCBkPSJNMzIgNiBMNTYgMzIgTDMyIDU4IEw4IDMyIFoiIGZpbGw9InVybCgjZykiLz48cGF0aCBkPSJNMjAgNDQgTDQ0IDIwIE0yNCAyMCBMNDQgNDAiIHN0cm9rZT0iI2ZmZDU0YSIgc3Ryb2tlLXdpZHRoPSI2IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4K">
   <style>
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; height: 100%; background: #0a0f1a; color: #e8ecf4;
@@ -269,6 +270,18 @@ table.keys td { padding: 2px 3px; border-bottom: 1px solid #1a2440; }
 .inv-slot img { width: 44px; height: 44px; border-radius: 5px; cursor: pointer; }
 .inv-slot button { font-size: 10px; padding: 1px 4px; background: #4a2a2a; color: #ffd0d0; border: 1px solid #a05050; border-radius: 4px; cursor: pointer; }
 .inv-slot button:disabled { opacity: 0.4; }
+/* Conexión: estado al unirse, estado de la sala y diagnóstico */
+.join-status { margin-top: 10px; padding: 8px 12px; border-radius: 8px; background: #13203a; border: 1px solid #2f4a7a; color: #bfe0ff; font-size: 14px; max-width: 760px; }
+.join-status.error { background: #2a1418; border-color: #a04a55; color: #ffc4c4; }
+.join-status.hidden { display: none; }
+#join-retry { margin-left: 8px; background: #2a3658; color: #fff; border: 1px solid #4a6aa8; border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+#lobby-info { display: flex; gap: 16px; justify-content: space-between; padding: 4px 16px; font-size: 13px; color: #9fd4ff; min-height: 18px; }
+#lobby-status.warn { color: #ffcf6a; font-weight: bold; }
+#lobby-net { color: #8fa0c0; }
+#lobby-net[data-kind="relay"] { color: #ffcf6a; }
+#lobby-net[data-kind="direct"] { color: #7dff9a; }
+.end-note { color: #ffcf6a; margin: 6px 0; min-height: 4px; }
+.end-btns { display: flex; gap: 10px; justify-content: center; }
 
 </style>
 </head>
@@ -295,6 +308,7 @@ table.keys td { padding: 2px 3px; border-bottom: 1px solid #1a2440; }
     <div id="tab-join" class="mode-tab hidden">
       <p>Escribí el código que te pasó quien creó la sala.</p>
       <input id="join-code" maxlength="8" placeholder="CÓDIGO" autocomplete="off"> <button id="join-room-btn" class="big-btn">Unirme</button>
+      <div id="join-status" class="join-status hidden"><span id="join-status-text"></span> <button id="join-retry" class="hidden">Reintentar</button></div>
     </div>
     <div class="net-options"><label><input type="checkbox" id="local-mode"> Modo local (pestañas de este mismo navegador, sin internet)</label>
       <span id="net-note"></span> <span id="menu-msg"></span></div>
@@ -325,6 +339,7 @@ table.keys td { padding: 2px 3px; border-bottom: 1px solid #1a2440; }
       <div class="lobby-actions"><span id="lobby-count"></span><button id="lobby-start" class="big-btn">¡Empezar partida!</button>
         <span id="lobby-wait">Esperando a que el anfitrión empiece…</span><button id="lobby-leave">Salir</button></div>
     </header>
+    <div id="lobby-info"><span id="lobby-status"></span><span id="lobby-net"></span></div>
     <div id="lobby-teams">
       <div class="team-col blue"><h3>Equipo Azul</h3><div id="lobby-team-blue"></div><button id="lobby-blue">Unirme al Azul</button></div>
       <div class="team-col red"><h3>Equipo Rojo</h3><div id="lobby-team-red"></div><button id="lobby-red">Unirme al Rojo</button></div>
@@ -16563,57 +16578,164 @@ MOBA.registerChampion({
   Net.cleanCode = function (c) { return String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8); };
   Net.peerAvailable = function () { return typeof window.peerjs !== 'undefined' && !!window.peerjs.Peer; };
 
+  // ======================= Servidores ICE (STUN / TURN) =======================
+  /* WebRTC intenta primero una conexión DIRECTA entre los navegadores (con ayuda de STUN).
+   * Si los routers no lo permiten (NAT simétrico, CGNAT de muchos proveedores, redes de oficina),
+   * hace falta un RELÉ (TURN) que pase los datos. El TURN que traía PeerJS por defecto
+   * (eu-0/us-0.turn.peerjs.com) ya no existe, por eso sin esto muchas conexiones no arrancaban nunca.
+   *
+   * ¿Querés usar tu propio TURN (recomendado si lo publicás en serio)? Agregalo en `servers`, por ejemplo:
+   *   { urls: ['turn:mi-turn.example.com:3478', 'turns:mi-turn.example.com:443?transport=tcp'], username: 'yo', credential: 'clave' }
+   * Servicios con plan gratis que te dan usuario y clave fijos: Metered, ExpressTURN, Twilio (de pago), o tu propio coturn. */
+  Net.ICE = {
+    servers: [
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+      // TURN público gratuito (turn.evan-brass.net, sin registro): UDP, TCP y TLS por el puerto 443
+      { urls: ['turn:turn.evan-brass.net:3478', 'turn:turn.evan-brass.net:3478?transport=tcp', 'turns:turn.evan-brass.net:443?transport=tcp'],
+        username: 'user', credential: 'password' }
+    ],
+    // Servicios que entregan credenciales TURN temporales sin cuenta (se piden al conectar; si fallan, se sigue sin ellos)
+    credentialUrls: ['https://turn.elixir-webrtc.org/?service=turn&username=mvmoba'],
+    fetchTimeoutMs: 3500
+  };
+  let iceCache = null;
+  /** Arma la configuración ICE: servidores fijos + credenciales temporales. Con ?relay=1 fuerza usar solo el relé (para probar TURN). */
+  Net.iceConfig = function () {
+    const relayOnly = /[?&]relay=1\b/.test(location.search);
+    if (iceCache && iceCache.until > Date.now()) return Promise.resolve({ iceServers: iceCache.servers, iceTransportPolicy: relayOnly ? 'relay' : 'all' });
+    const fetchOne = function (url) {
+      if (typeof fetch !== 'function' || typeof AbortController === 'undefined') return Promise.resolve(null);
+      const ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, Net.ICE.fetchTimeoutMs);
+      return fetch(url, { method: 'POST', signal: ctl.signal }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { clearTimeout(t); return j && j.uris && j.username ? { urls: j.uris, username: j.username, credential: j.password, ttl: j.ttl || 600 } : null; })
+        .catch(function () { clearTimeout(t); return null; });
+    };
+    return Promise.all(Net.ICE.credentialUrls.map(fetchOne)).then(function (extra) {
+      const got = extra.filter(Boolean);
+      const servers = Net.ICE.servers.concat(got.map(function (e) { return { urls: e.urls, username: e.username, credential: e.credential }; }));
+      const ttl = got.length ? Math.min.apply(null, got.map(function (e) { return e.ttl; })) : 600;
+      iceCache = { servers: servers, until: Date.now() + Math.max(60, ttl - 60) * 1000 };
+      return { iceServers: servers, iceTransportPolicy: relayOnly ? 'relay' : 'all' };
+    });
+  };
+  /** Qué tipo de conexión quedó: 'relé TURN' o 'directa'. Devuelve una promesa con { kind, text }. */
+  Net.describeConnection = function (pc) {
+    if (!pc || !pc.getStats) return Promise.resolve(null);
+    return pc.getStats().then(function (stats) {
+      let pair = null; const byId = {};
+      stats.forEach(function (s) { byId[s.id] = s; });
+      stats.forEach(function (s) { if (s.type === 'transport' && s.selectedCandidatePairId) pair = byId[s.selectedCandidatePairId]; });
+      if (!pair) stats.forEach(function (s) { if (s.type === 'candidate-pair' && (s.selected || s.nominated) && s.state === 'succeeded') pair = pair || s; });
+      if (!pair) return null;
+      const l = byId[pair.localCandidateId] || {}, r = byId[pair.remoteCandidateId] || {};
+      const relay = l.candidateType === 'relay' || r.candidateType === 'relay';
+      const rtt = pair.currentRoundTripTime != null ? Math.round(pair.currentRoundTripTime * 1000) + ' ms' : '';
+      return { kind: relay ? 'relay' : 'direct', text: (relay ? 'por relé TURN' : 'directa P2P') + (rtt ? ' · ' + rtt : ''), local: l.candidateType, remote: r.candidateType };
+    }).catch(function () { return null; });
+  };
+
   // ======================= Transportes =======================
-  /** Anfitrión con PeerJS. handlers: { ready(code), join(id), message(id, msg), leave(id), error(text) } */
+  /** Anfitrión con PeerJS. handlers: { ready(code), join(id), message(id, msg), leave(id), error(text), status(text) } */
   function PeerHost(code, h) {
     const self = this;
-    this.conns = {};
-    this.kind = 'peer';
-    const peer = this.peer = new window.peerjs.Peer(Net.PREFIX + code, { debug: 0 });
-    peer.on('open', function () { h.ready(code); });
-    peer.on('connection', function (conn) {
-      conn.on('open', function () { self.conns[conn.peer] = conn; h.join(conn.peer); });
-      conn.on('data', function (d) { h.message(conn.peer, typeof d === 'string' ? JSON.parse(d) : d); });
-      conn.on('close', function () { delete self.conns[conn.peer]; h.leave(conn.peer); });
-      conn.on('error', function () { delete self.conns[conn.peer]; h.leave(conn.peer); });
+    this.conns = {}; this.kind = 'peer'; this.closed = false; this.code = code;
+    Net.iceConfig().then(function (cfg) {
+      if (self.closed) return;
+      const peer = self.peer = new window.peerjs.Peer(Net.PREFIX + code, { debug: 0, config: cfg });
+      let wasOpen = false;
+      peer.on('open', function () { if (!wasOpen) { wasOpen = true; h.ready(code); } else if (h.status) h.status('Reconectado con el servidor. La sala sigue abierta.'); });
+      peer.on('connection', function (conn) {
+        conn.on('open', function () { self.conns[conn.peer] = conn; h.join(conn.peer); });
+        conn.on('data', function (d) { h.message(conn.peer, typeof d === 'string' ? JSON.parse(d) : d); });
+        conn.on('close', function () { if (self.conns[conn.peer]) { delete self.conns[conn.peer]; h.leave(conn.peer); } });
+        conn.on('error', function () { if (self.conns[conn.peer]) { delete self.conns[conn.peer]; h.leave(conn.peer); } });
+      });
+      // Si se corta la conexión con el servidor de señalización, la sala deja de ser "encontrable": reconectar
+      peer.on('disconnected', function () {
+        if (self.closed || peer.destroyed) return;
+        if (h.status) h.status('Se cortó la conexión con el servidor de salas. Reconectando…');
+        let tries = 0;
+        const again = function () { if (self.closed || peer.destroyed || !peer.disconnected) return; tries++; try { peer.reconnect(); } catch (e) { /* nada */ } if (tries < 20) setTimeout(again, Math.min(15000, 1500 * tries)); };
+        setTimeout(again, 500);
+      });
+      peer.on('error', function (e) {
+        const t = e && e.type;
+        if (t === 'peer-unavailable') return;                                 // no aplica al anfitrión
+        if ((t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') && wasOpen) return;   // lo maneja 'disconnected'
+        h.error(Net.peerError(e));
+      });
     });
-    peer.on('error', function (e) { h.error(Net.peerError(e)); });
     window.addEventListener('pagehide', function () { self.close(); });
   }
-  PeerHost.prototype.send = function (id, msg) { const c = this.conns[id]; if (c && c.open) c.send(JSON.stringify(msg)); };
-  PeerHost.prototype.close = function () { try { this.peer.destroy(); } catch (e) { /* nada */ } };
+  PeerHost.prototype.send = function (id, msg) { if (this.closed) return; const c = this.conns[id]; if (c && c.open) c.send(JSON.stringify(msg)); };
+  PeerHost.prototype.close = function () { this.closed = true; try { if (this.peer) this.peer.destroy(); } catch (e) { /* nada */ } };
+  PeerHost.prototype.diag = function (id) { const c = this.conns[id]; return Net.describeConnection(c && c.peerConnection); };
 
-  /** Cliente con PeerJS. handlers: { open(), message(msg), close(), error(text) } */
+  Net.JOIN_TIMEOUT = 15000;
+  /** Cliente con PeerJS. handlers: { open(), message(msg), close(), error(text, opts), stage(text) } */
   function PeerClient(code, h) {
     const self = this;
-    this.kind = 'peer';
-    const peer = this.peer = new window.peerjs.Peer({ debug: 0 });
-    let opened = false;
-    peer.on('open', function () {
-      const conn = self.conn = peer.connect(Net.PREFIX + code, { reliable: true, serialization: 'raw' });
-      conn.on('open', function () { opened = true; h.open(); });
-      conn.on('data', function (d) { h.message(typeof d === 'string' ? JSON.parse(d) : d); });
-      conn.on('close', function () { h.close(); });
-      conn.on('error', function (e) { h.error(Net.peerError(e)); });
+    this.kind = 'peer'; this.closed = false;
+    let opened = false, failed = false;
+    const stage = function (t) { if (!opened && !failed && h.stage) h.stage(t); };
+    const fail = function (text) {
+      if (opened || failed || self.closed) return;
+      failed = true; clearTimeout(self.timer);
+      self.close();
+      h.error(text, { retry: true });
+    };
+    stage('1/3 · Contactando el servidor de salas…');
+    this.timer = setTimeout(function () {
+      fail('No se pudo conectar con la sala ' + code + ' en ' + Math.round(Net.JOIN_TIMEOUT / 1000) + ' s. Puede ser que el anfitrión haya cerrado la pestaña o ' +
+        'se haya quedado sin internet, o que alguna de las dos redes bloquee las conexiones entre navegadores (WebRTC). Probá de nuevo; si sigue igual, que el anfitrión cree una sala nueva.');
+    }, Net.JOIN_TIMEOUT);
+    Net.iceConfig().then(function (cfg) {
+      if (self.closed) return;
+      const peer = self.peer = new window.peerjs.Peer({ debug: 0, config: cfg });
+      peer.on('open', function () {
+        stage('2/3 · Buscando la sala ' + code + '…');
+        const conn = self.conn = peer.connect(Net.PREFIX + code, { reliable: true, serialization: 'raw' });
+        const pc = conn.peerConnection;
+        if (pc && pc.addEventListener) {
+          pc.addEventListener('signalingstatechange', function () { if (pc.signalingState === 'stable' && pc.remoteDescription) stage('3/3 · Sala encontrada: estableciendo la conexión con el anfitrión…'); });
+          pc.addEventListener('iceconnectionstatechange', function () {
+            if (pc.iceConnectionState === 'failed') fail('Se encontró la sala, pero no se pudo establecer la conexión entre los dos navegadores (ni directa ni por relé). Alguna de las redes bloquea WebRTC. Probá con otra red (por ejemplo, datos del celular) o de nuevo en un rato.');
+          });
+        }
+        conn.on('open', function () {
+          opened = true; clearTimeout(self.timer); h.open();
+        });
+        conn.on('data', function (d) { h.message(typeof d === 'string' ? JSON.parse(d) : d); });
+        conn.on('close', function () { if (opened) h.close(); });
+        conn.on('error', function (e) { if (opened) h.error(Net.peerError(e)); else fail(Net.peerError(e)); });
+      });
+      peer.on('disconnected', function () { if (opened && !self.closed && !peer.destroyed) { try { peer.reconnect(); } catch (e) { /* nada */ } } });
+      peer.on('error', function (e) {
+        const t = e && e.type;
+        if (t === 'peer-unavailable') { fail('La sala ' + code + ' no existe o el anfitrión cerró la pestaña. Revisá el código o pedile un link nuevo.'); return; }
+        if (opened) { if (t !== 'network' && t !== 'socket-error' && t !== 'socket-closed' && t !== 'server-error') h.error(Net.peerError(e)); return; }
+        fail(Net.peerError(e));
+      });
     });
     window.addEventListener('pagehide', function () { self.close(); });
-    peer.on('error', function (e) { h.error(opened ? Net.peerError(e) : (e && e.type === 'peer-unavailable' ? 'No existe una sala con ese código.' : Net.peerError(e))); });
   }
-  PeerClient.prototype.send = function (msg) { if (this.conn && this.conn.open) this.conn.send(JSON.stringify(msg)); };
-  PeerClient.prototype.close = function () { try { this.peer.destroy(); } catch (e) { /* nada */ } };
+  PeerClient.prototype.send = function (msg) { if (this.closed) return; if (this.conn && this.conn.open) this.conn.send(JSON.stringify(msg)); };
+  PeerClient.prototype.close = function () { this.closed = true; clearTimeout(this.timer); try { if (this.peer) this.peer.destroy(); } catch (e) { /* nada */ } };
+  PeerClient.prototype.diag = function () { return Net.describeConnection(this.conn && this.conn.peerConnection); };
   Net.peerError = function (e) {
     const t = e && e.type;
     if (t === 'unavailable-id') return 'Ese código de sala ya está en uso. Probá de nuevo.';
-    if (t === 'peer-unavailable') return 'No existe una sala con ese código (o el anfitrión se fue).';
-    if (t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') return 'No se pudo conectar con el servidor de PeerJS. ¿Hay internet? Podés probar el modo local (misma compu).';
+    if (t === 'peer-unavailable') return 'La sala no existe o el anfitrión cerró la pestaña.';
+    if (t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') return 'No se pudo conectar con el servidor de salas (PeerJS). ¿Hay internet? Podés probar el modo local (misma compu).';
     if (t === 'browser-incompatible') return 'Este navegador no soporta WebRTC.';
+    if (t === 'webrtc' || t === 'negotiation-failed') return 'No se pudo establecer la conexión WebRTC (alguna red la bloquea).';
     return 'Error de conexión: ' + (t || (e && e.message) || e);
   };
 
   /** Transporte local con BroadcastChannel (pestañas del mismo navegador). */
   function LocalHost(code, h) {
     const self = this;
-    this.kind = 'local'; this.peers = {};
+    this.kind = 'local'; this.peers = {}; this.conns = this.peers;
     const ch = this.ch = new BroadcastChannel(Net.PREFIX + code);
     ch.onmessage = function (ev) {
       const m = ev.data;
@@ -16621,17 +16743,22 @@ MOBA.registerChampion({
       if (m.type === 'hello') { self.peers[m.from] = performance.now(); ch.postMessage({ to: m.from, type: 'welcome' }); h.join(m.from); }
       else if (m.type === 'bye') { if (self.peers[m.from]) { delete self.peers[m.from]; h.leave(m.from); } }
       else if (self.peers[m.from]) { self.peers[m.from] = performance.now(); if (m.type === 'data') h.message(m.from, m.data); }
+      else if (m.type === 'ping' || m.type === 'data') ch.postMessage({ to: m.from, type: 'closed' });   // lo habíamos dado por ido: que se entere
     };
     // sin noticias de una pestaña en 6 s = se fue (por si se cerró sin avisar)
+    let lastWatch = performance.now();
     this.watch = setInterval(function () {
       const now = performance.now();
-      for (const id in self.peers) if (now - self.peers[id] > 6000) { delete self.peers[id]; h.leave(id); }
+      // si fue ESTA pestaña la que estuvo trabada (o en segundo plano), no es culpa de los demás
+      if (now - lastWatch > 3000) for (const id in self.peers) self.peers[id] = now;
+      lastWatch = now;
+      for (const id in self.peers) if (now - self.peers[id] > 8000) { delete self.peers[id]; h.leave(id); }
     }, 1000);
     this.onHide = function () { self.close(); };
     window.addEventListener('pagehide', this.onHide);
     setTimeout(function () { h.ready(code); }, 0);
   }
-  LocalHost.prototype.send = function (id, msg) { this.ch.postMessage({ to: id, type: 'data', data: msg }); };
+  LocalHost.prototype.send = function (id, msg) { if (this.closed) return; this.ch.postMessage({ to: id, type: 'data', data: msg }); };
   LocalHost.prototype.close = function () {
     if (this.closed) return;
     this.closed = true; clearInterval(this.watch); window.removeEventListener('pagehide', this.onHide);
@@ -16654,9 +16781,9 @@ MOBA.registerChampion({
     this.ping = setInterval(function () { if (open) ch.postMessage({ to: 'host', from: self.id, type: 'ping' }); }, 1000);
     this.onHide = function () { self.close(); };
     window.addEventListener('pagehide', this.onHide);
-    setTimeout(function () { if (!open && !self.closed) h.error('No existe una sala local con ese código (abrila en otra pestaña de este navegador).'); }, 2500);
+    setTimeout(function () { if (!open && !self.closed) h.error('No existe una sala local con ese código (abrila en otra pestaña de este navegador).', { retry: true }); }, 2500);
   }
-  LocalClient.prototype.send = function (msg) { this.ch.postMessage({ to: 'host', from: this.id, type: 'data', data: msg }); };
+  LocalClient.prototype.send = function (msg) { if (this.closed) return; this.ch.postMessage({ to: 'host', from: this.id, type: 'data', data: msg }); };
   LocalClient.prototype.close = function () {
     if (this.closed) return;
     this.closed = true; clearInterval(this.ping); window.removeEventListener('pagehide', this.onHide);
@@ -16933,6 +17060,7 @@ MOBA.registerChampion({
       delete this.clients[id];
     }
     step(dt) {
+      if (this.closed) return;
       this.sendTimer -= dt;
       if (this.sendTimer > 0) return;
       this.sendTimer = 1 / Net.SNAPSHOT_HZ;
@@ -16946,7 +17074,7 @@ MOBA.registerChampion({
         this.transport.send(id, { k: 's', s: s, e: ev });
       }
     }
-    close() { this.transport.close(); }
+    close() { this.closed = true; this.transport.close(); }
   }
   /** Cliente: manda órdenes y dibuja la réplica interpolada. */
   class ClientSession {
@@ -17969,6 +18097,15 @@ MOBA.registerChampion({
       this.disposed = true;
       const fn = this.settingsFn;
       M.Settings.listeners = M.Settings.listeners.filter(function (f) { return f !== fn; });
+      // liberar geometrías, materiales y texturas de la escena
+      try {
+        this.scene.traverse(function (o) {
+          if (o.geometry) o.geometry.dispose();
+          if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) { for (const k in m) { const v = m[k]; if (v && v.isTexture) v.dispose(); } m.dispose(); });
+        });
+        if (this.ghostMat) this.ghostMat.dispose();
+      } catch (e) { /* nada */ }
+      this.views.clear(); this.fxViews = []; this.pools = {};
       try { this.gl.dispose(); this.gl.forceContextLoss(); } catch (e) { /* nada */ }
     }
   }
@@ -18458,7 +18595,8 @@ MOBA.registerChampion({
       };
     }
 
-    showEnd(winner, onRestart) {
+    showEnd(winner, buttons) {
+      if (typeof buttons === 'function') buttons = [{ text: 'Menú principal', fn: buttons }];
       const g = this.game, win = winner === this.p.team;
       const el = $('endscreen');
       el.classList.remove('hidden');
@@ -18469,8 +18607,8 @@ MOBA.registerChampion({
       el.innerHTML = '<div class="panel"><h1 class="' + (win ? 'win' : 'lose') + '">' + (win ? '¡VICTORIA!' : 'DERROTA') + '</h1>' +
         '<div style="margin-bottom:10px;color:#9fb0d0">Duración: ' + U.fmtTime(g.time) + ' · Azul ' + g.score[0] + ' — ' + g.score[1] + ' Rojo</div>' +
         '<table style="margin:0 auto 14px;font-size:13px;border-collapse:collapse"><tr style="color:#9fb0d0"><td>Campeón</td><td>Rol</td><td>Nivel</td><td>A/M/As</td><td>Súbditos</td></tr>' + rows + '</table>' +
-        '<button id="restart-btn">Volver a la selección</button></div>';
-      $('restart-btn').onclick = onRestart;
+        '<div id="end-note" class="end-note"></div><div class="end-btns">' + buttons.map(function (b, i) { return '<button data-end="' + i + '"' + (i === 0 ? ' id="restart-btn"' : '') + '>' + b.text + '</button>'; }).join('') + '</div></div>';
+      el.querySelectorAll('[data-end]').forEach(function (btn) { btn.onclick = function () { buttons[+btn.dataset.end].fn(); }; });
     }
   }
 
@@ -18612,6 +18750,24 @@ MOBA.registerChampion({
   const Lobby = M.Lobby = {
     role: null,          // 'host' | 'client'
     transport: null, state: null, myId: null, mode: 'peer', session: null,
+    gen: 0,              // sube con cada conexión nueva: los avisos de conexiones viejas se ignoran
+    hostGone: false, lastJoin: null,
+
+    /** Envuelve los avisos de un transporte para que, si ya se reemplazó por otro, no toquen el estado actual. */
+    guard: function (handlers) {
+      const gen = ++this.gen, self = this, out = {};
+      Object.keys(handlers).forEach(function (k) { out[k] = function () { if (self.gen !== gen) return; return handlers[k].apply(null, arguments); }; });
+      return out;
+    },
+    /** Saca ?sala= de la dirección (para que no se reuse un código viejo al recargar). */
+    clearUrlCode: function () {
+      try {
+        const u = new URL(location.href);
+        if (!u.searchParams.has('sala')) return;
+        u.searchParams.delete('sala'); u.searchParams.delete('net');
+        history.replaceState(null, '', u.pathname + (u.search ? u.search : '') + u.hash);
+      } catch (e) { /* nada */ }
+    },
 
     // ---------- Menú ----------
     initMenu: function () {
@@ -18635,6 +18791,8 @@ MOBA.registerChampion({
       };
       $('lobby-blue').onclick = function () { Lobby.request({ k: 'team', team: 0 }); };
       $('lobby-red').onclick = function () { Lobby.request({ k: 'team', team: 1 }); };
+      $('join-retry').onclick = function () { Lobby.joinRoom(Lobby.lastJoin || $('join-code').value); };
+      document.addEventListener('visibilitychange', function () { Lobby.updateHostStatus(); });
       if (!Net.peerAvailable()) $('net-note').textContent = 'PeerJS no está cargado: solo funciona el modo local.';
       this.showTab(params.get('sala') ? 'join' : 'solo');
     },
@@ -18645,6 +18803,15 @@ MOBA.registerChampion({
       this.setMenuMsg('');
     },
     setMenuMsg: function (t, bad) { const el = $('menu-msg'); el.textContent = t || ''; el.style.color = bad ? '#ff8a8a' : '#9fd4ff'; },
+    /** Estado de la conexión al unirse: etapa actual, o error con botón Reintentar. */
+    setJoinStatus: function (text, kind) {
+      const box = $('join-status');
+      if (!box) return;
+      box.classList.toggle('hidden', !text);
+      box.className = 'join-status' + (text ? '' : ' hidden') + (kind === 'error' ? ' error' : '');
+      $('join-status-text').textContent = text || '';
+      $('join-retry').classList.toggle('hidden', kind !== 'error');
+    },
     playerName: function () {
       const n = ($('player-name').value || '').trim().slice(0, 16) || 'Invocador';
       localStorage.setItem('mvmoba-name', n);
@@ -18658,18 +18825,21 @@ MOBA.registerChampion({
       this.mode = this.netMode();
       this.role = 'host'; this.myId = 'host';
       this.state = { code: code, mode: this.mode, players: [{ id: 'host', name: this.playerName(), team: 0, champ: (M.SelectScreen.selected || M.champions[0]).id }] };
-      this.setMenuMsg(this.mode === 'local' ? 'Creando sala local…' : 'Conectando con el servidor de PeerJS…');
-      this.handlers = {
-        ready: function () { self.showLobby(); },
+      this.setMenuMsg(this.mode === 'local' ? 'Creando sala local…' : 'Conectando con el servidor de salas…');
+      this.hostStatus = '';
+      if (this.transport) { try { this.transport.close(); } catch (e) { /* nada */ } }
+      this.handlers = this.guard({
+        ready: function () { self.setMenuMsg(''); self.showLobby(); },
+        status: function (text) { self.hostStatus = text; self.updateHostStatus(); },
         join: function (id) { self.onJoin(id); },
         message: function (id, msg) { self.onHostMessage(id, msg); },
         leave: function (id) { self.onLeave(id); },
         error: function (text) {
           if (/en uso/.test(text) && !retry) { self.transport.close(); self.createRoom(true); return; }
           if (self.session) { if (M.App.notice) M.App.notice(text); return; }
-          self.setMenuMsg(text, true); self.backToMenu();
+          self.setMenuMsg(text, true); self.reset(); self.backToMenu();
         }
-      };
+      });
       try { this.transport = Net.createHost(this.mode, code, this.handlers); }
       catch (e) { this.setMenuMsg('No se pudo crear la sala: ' + e.message, true); }
     },
@@ -18745,36 +18915,137 @@ MOBA.registerChampion({
     joinRoom: function (codeRaw) {
       const code = Net.cleanCode(codeRaw), self = this;
       if (code.length < 4) { this.setMenuMsg('Escribí el código de la sala (5 letras).', true); return; }
+      this.reset();
       this.mode = this.netMode();
-      this.role = 'client';
-      this.setMenuMsg(this.mode === 'local' ? 'Buscando la sala local ' + code + '…' : 'Conectando con la sala ' + code + '…');
-      this.handlers = {
-        open: function () { self.transport.send({ k: 'hello', name: self.playerName() }); },
-        message: function (msg) { self.onClientMessage(msg); },
-        close: function () {
-          if (self.session) { if (M.App.notice) M.App.notice('Se cortó la conexión con el anfitrión.'); }
-          else { self.setMenuMsg('El anfitrión cerró la sala.', true); self.backToMenu(); }
+      this.role = 'client'; this.lastJoin = code; this.hostGone = false;
+      this.setMenuMsg('');
+      this.setJoinStatus(this.mode === 'local' ? 'Buscando la sala local ' + code + '…' : 'Conectando con la sala ' + code + '…');
+      this.handlers = this.guard({
+        stage: function (text) { self.setJoinStatus(text); },
+        open: function () {
+          self.setJoinStatus('¡Conectado! Entrando a la sala…');
+          self.clearUrlCode();
+          self.transport.send({ k: 'hello', name: self.playerName() });
         },
-        error: function (text) {
-          if (self.session) { if (M.App.notice) M.App.notice(text); return; }
-          self.setMenuMsg(text, true); self.backToMenu();
+        message: function (msg) { self.onClientMessage(msg); },
+        close: function () { self.onHostGone('El anfitrión cerró la sala.'); },
+        error: function (text, opts) {
+          if (self.session || (self.state && !(opts && opts.retry))) { self.onHostGone(text); return; }
+          self.transport = null; self.role = null;
+          self.backToMenu();
+          self.showTab('join');
+          self.setJoinStatus(text, 'error');
         }
-      };
+      });
       try { this.transport = Net.createClient(this.mode, code, this.handlers); }
-      catch (e) { this.setMenuMsg('No se pudo conectar: ' + e.message, true); }
+      catch (e) { this.setJoinStatus('No se pudo conectar: ' + e.message, 'error'); }
+    },
+    /** El anfitrión se fue (cerró la pestaña, se cortó o volvió al menú). */
+    onHostGone: function (text) {
+      this.hostGone = true;
+      if (this.session && this.session.world && this.session.world.over) {
+        // en la pantalla final: se avisa y "Volver a la sala" pasa a llevar al menú
+        if (M.App.notice) M.App.notice(text);
+        const note = $('end-note'); if (note) note.textContent = text + ' Podés volver al menú principal y crear o unirte a otra sala.';
+        return;
+      }
+      const wasInGame = !!this.session;
+      this.reset();
+      M.App.showSelect();
+      this.setMenuMsg(text + (wasInGame ? ' La partida terminó.' : ''), true);
     },
     onClientMessage: function (msg) {
       if (!msg) return;
+      if (msg.k === 'lobby') {
+        // de vuelta a la sala (revancha): si todavía estaba la partida, se cierra
+        if (this.session) { this.session = null; M.App.teardownView(); }
+        this.state = msg.state; this.myId = msg.you; this.waitingRoom = false;
+        if ($('lobby-screen').classList.contains('hidden')) this.showLobby(); else this.renderLobby();
+        return;
+      }
       if (this.session) { this.session.onMessage(msg); return; }
-      if (msg.k === 'lobby') { this.state = msg.state; this.myId = msg.you; if ($('lobby-screen').classList.contains('hidden')) this.showLobby(); else this.renderLobby(); }
-      else if (msg.k === 'full') { this.setMenuMsg(msg.text, true); this.transport.close(); this.backToMenu(); }
-      else if (msg.k === 'start') { this.session = M.App.startClient(this.transport, msg); }
+      if (msg.k === 'full') { const t = msg.text; this.reset(); this.backToMenu(); this.showTab('join'); this.setJoinStatus(t, 'error'); }
+      else if (msg.k === 'start') { this.setJoinStatus(''); this.session = M.App.startClient(this.transport, msg); }
+    },
+
+    // ---------- Después de la partida ----------
+    /** Botones de la pantalla final según el tipo de partida. */
+    endButtons: function () {
+      const self = this;
+      if (this.role === 'host') return [
+        { text: 'Volver a la sala (revancha)', fn: function () { self.backToRoom(); } },
+        { text: 'Menú principal', fn: function () { self.toMenu(); } }];
+      if (this.role === 'client') return [
+        { text: 'Volver a la sala', fn: function () { self.backToRoom(); } },
+        { text: 'Menú principal', fn: function () { self.toMenu(); } }];
+      return [{ text: 'Menú principal', fn: function () { self.toMenu(); } }];
+    },
+    /** Revancha: el anfitrión vuelve a la sala con los mismos amigos; el cliente espera que el anfitrión vuelva. */
+    backToRoom: function () {
+      if (this.role === 'host' && this.transport && this.state) {
+        this.session = null;
+        M.App.teardownView();
+        const conns = this.transport.conns || null;
+        // se quedan solo los que siguen conectados
+        if (conns) this.state.players = this.state.players.filter(function (p) { return p.id === 'host' || conns[p.id]; });
+        else if (this.transport.clients) { const cl = this.transport.clients; this.state.players = this.state.players.filter(function (p) { return p.id === 'host' || cl[p.id]; }); }
+        this.showLobby();
+        this.broadcastLobby();
+        return;
+      }
+      if (this.role === 'client' && this.transport && !this.hostGone && this.state) {
+        this.session = null;
+        M.App.teardownView();
+        this.waitingRoom = true;
+        this.showLobby();
+        return;
+      }
+      this.toMenu(this.hostGone ? 'El anfitrión cerró la sala.' : '');
+    },
+    toMenu: function (msg) {
+      this.reset();
+      M.App.showSelect();
+      if (msg) this.setMenuMsg(msg, true);
+    },
+    updateHostStatus: function () {
+      const el = $('lobby-status');
+      if (!el) return;
+      if (!this.state || $('lobby-screen').classList.contains('hidden')) { el.textContent = ''; return; }
+      let t = '', warn = false;
+      if (this.role === 'host') {
+        const n = this.state.players.length - 1;
+        t = n ? n + ' amigo' + (n === 1 ? '' : 's') + ' conectado' + (n === 1 ? '' : 's') + ' · pasales el código ' + this.state.code + ' si falta alguien' : 'Esperando jugadores… pasales el código ' + this.state.code;
+        if (this.hostStatus) { t = this.hostStatus + ' · ' + t; warn = /cort|Reconect/.test(this.hostStatus) && !/Reconectado/.test(this.hostStatus); }
+        if (document.hidden) { t = '⚠ Tu pestaña está en segundo plano: dejala visible para que la sala no se corte. · ' + t; warn = true; }
+      } else if (this.waitingRoom) t = 'Esperando a que el anfitrión vuelva a la sala…';
+      el.textContent = t;
+      el.classList.toggle('warn', warn);
+    },
+    /** Diagnóstico: ¿la conexión es directa o por relé TURN? */
+    updateDiag: function () {
+      const el = $('lobby-net');
+      if (!el || !this.transport || !this.transport.diag || !this.state) { if (el) el.textContent = ''; return; }
+      const tr = this.transport;
+      if (this.role === 'client') {
+        tr.diag().then(function (d) { el.textContent = d ? 'Conexión con el anfitrión: ' + d.text : ''; el.dataset.kind = d ? d.kind : ''; });
+      } else {
+        const ids = this.state.players.filter(function (p) { return p.id !== 'host'; });
+        Promise.all(ids.map(function (p) { return tr.diag(p.id).then(function (d) { return d ? esc(p.name) + ': ' + d.text : null; }); })).then(function (list) {
+          const ok = list.filter(Boolean);
+          el.textContent = ok.length ? 'Conexiones: ' + ok.join(' · ') : '';
+          el.dataset.kind = ok.some(function (x) { return /relé/.test(x); }) ? 'relay' : (ok.length ? 'direct' : '');
+        });
+      }
     },
 
     // ---------- Interfaz de la sala ----------
     showLobby: function () {
       $('select-screen').classList.add('hidden');
+      $('game-screen').classList.add('hidden');
       $('lobby-screen').classList.remove('hidden');
+      this.setJoinStatus('');
+      if (M.Audio) M.Audio.setScene('menu');
+      if (!this.diagTimer) this.diagTimer = setInterval(() => { if (!$('lobby-screen').classList.contains('hidden')) { this.updateDiag(); this.updateHostStatus(); } }, 2000);
       this.renderLobby();
       const me = this.state.players.find((q) => q.id === this.myId);
       const def = M.championById[(me && me.champ) || ''] || M.SelectScreen.selected || M.champions[0];
@@ -18820,20 +19091,27 @@ MOBA.registerChampion({
       $('lobby-start').classList.toggle('hidden', !host);
       $('lobby-wait').classList.toggle('hidden', host);
       $('lobby-count').textContent = st.players.length + ' jugador' + (st.players.length === 1 ? '' : 'es') + ' · ' + (10 - st.players.length) + ' bots';
+      $('lobby-wait').textContent = this.waitingRoom ? 'Esperando a que el anfitrión vuelva a la sala…' : 'Esperando a que el anfitrión empiece…';
+      this.updateHostStatus();
       if ($('lobby-screen').offsetParent !== null) this.renderPicker();
     },
     leave: function () {
-      if (this.transport) this.transport.close();
-      this.transport = null; this.state = null; this.session = null; this.role = null;
+      this.reset();
       this.backToMenu();
     },
     backToMenu: function () {
       $('lobby-screen').classList.add('hidden');
       if (!this.session) { $('select-screen').classList.remove('hidden'); M.App.showSelect(); }
     },
+    /** Cierra todo lo de la red: conexión, sesión, estado de la sala y avisos pendientes. */
     reset: function () {
+      this.gen++;                 // los avisos de la conexión vieja ya no hacen nada
+      if (this.session && this.session.close) { try { this.session.close(); } catch (e) { /* nada */ } }
       if (this.transport) { try { this.transport.close(); } catch (e) { /* nada */ } }
-      this.transport = null; this.state = null; this.session = null; this.role = null;
+      this.transport = null; this.state = null; this.session = null; this.role = null; this.myId = null;
+      this.hostGone = false; this.waitingRoom = false; this.hostStatus = '';
+      this.clearUrlCode();
+      const net = $('lobby-net'); if (net) net.textContent = '';
     }
   };
 })(window.MOBA);
@@ -18860,11 +19138,27 @@ MOBA.registerChampion({
 
   function me() { return world ? world.player : null; }
 
-  function showSelect() {
-    if (renderer) { renderer.dispose(); }
+  /** Cierra la vista de la partida: renderer (y su escena), HUD, bucle, entradas y pantallas.
+   *  No toca la conexión de red (eso lo maneja MOBA.Lobby). */
+  function teardownView() {
+    if (world) world.onGameOver = null;
+    if (renderer) { try { renderer.dispose(); } catch (e) { /* nada */ } }
     if (hud && hud.destroy) hud.destroy();
-    session = null; world = null; renderer = null; hud = null;
+    if (renderer) {
+      // canvas nuevo para la próxima partida (el contexto WebGL viejo queda descartado)
+      const old = $('game-canvas'), fresh = old.cloneNode(false);
+      old.parentNode.replaceChild(fresh, old);
+    }
+    session = null; world = null; renderer = null; hud = null; M.game = null;
+    stopBackgroundTicker();
+    acc = 0; attackArmed = false; aiming = null; aimNormal = false; pingHeld = false; spaceHeld = false; rightHeld = false;
+    for (const k in keysPan) keysPan[k] = false;
+    ['endscreen', 'pause', 'shop', 'scoreboard', 'death-overlay', 'tooltip'].forEach(function (id) { const el = $(id); if (el) { el.classList.add('hidden'); if (id === 'endscreen') el.innerHTML = ''; } });
     $('game-screen').classList.add('hidden');
+  }
+
+  function showSelect() {
+    teardownView();
     $('lobby-screen').classList.add('hidden');
     $('select-screen').classList.remove('hidden');
     M.SelectScreen.init({ onPlay: startSolo });
@@ -18890,8 +19184,9 @@ MOBA.registerChampion({
     if (M.Audio) M.Audio.setScene('match');
     hud = new M.HUD(session, renderer);
     s.onNotice = function (t) { if (hud) hud.showNotice(t); };
+    const myWorld = world;
     world.onGameOver = function (winner) {
-      setTimeout(function () { if (hud) hud.showEnd(winner, function () { M.Lobby.reset(); showSelect(); }); }, 1500);
+      setTimeout(function () { if (hud && world === myWorld) hud.showEnd(winner, M.Lobby.endButtons()); }, 1500);
     };
     M.game = world;
     acc = 0; attackArmed = false; setAiming(null); lastCO = null;
@@ -19111,7 +19406,7 @@ MOBA.registerChampion({
     });
     window.addEventListener('resize', function () { if (renderer) renderer.resize(); });
     $('resume-btn').onclick = function () { togglePause(false); };
-    $('quit-btn').onclick = function () { togglePause(false); M.Lobby.reset(); showSelect(); };
+    $('quit-btn').onclick = function () { togglePause(false); M.Lobby.toMenu(); };
     $('pause-settings-btn').onclick = function () { M.SettingsUI.open(); };
     $('hud-gear').onclick = function () { openSettings(); };
     $('menu-gear').onclick = function () { M.SettingsUI.open(); };
@@ -19154,6 +19449,7 @@ MOBA.registerChampion({
   /** Si el anfitrión pone la pestaña en segundo plano, el navegador frena requestAnimationFrame.
    *  Para que la partida no se congele para los demás, un Worker marca el ritmo y la simulación sigue. */
   let bgWorker = null, lastBg = 0;
+  function stopBackgroundTicker() { if (bgWorker) { try { bgWorker.terminate(); } catch (e) { /* nada */ } bgWorker = null; } }
   function startBackgroundTicker() {
     if (bgWorker || typeof Worker === 'undefined') return;
     try {
@@ -19199,7 +19495,7 @@ MOBA.registerChampion({
     requestAnimationFrame(frame);
   }
 
-  M.App = { showSelect: showSelect, startSolo: startSolo, startHosted: startHosted, startClient: startClient,
+  M.App = { showSelect: showSelect, teardownView: teardownView, startSolo: startSolo, startHosted: startHosted, startClient: startClient,
     notice: function (t) { if (hud) hud.showNotice(t); } };
 
   // API de depuración (usada por los tests)
@@ -19210,7 +19506,7 @@ MOBA.registerChampion({
       const roster = ids.map(function (id, i) { return { defId: id, team: i < 5 ? 0 : 1, human: i === 0, slot: i === 0 ? 'local' : null, name: i === 0 ? 'Vos' : '' }; });
       return startView(new M.Net.LocalSession(new M.Game({ roster: roster, localSlot: 'local' })));
     },
-    simulate: function (seconds) { if (!session || !session.local) return; const g = session.game, n = Math.round(seconds / STEP), was = g.paused; g.paused = false; for (let i = 0; i < n && !g.over; i++) { g.update(STEP); if (i % 3 === 0) session.step(STEP * 3); } g.paused = was; },
+    simulate: function (seconds) { if (!session || !session.local) return; const g = session.game, n = Math.round(seconds / STEP), was = g.paused; g.paused = false; for (let i = 0; i < n && !g.over; i++) g.update(STEP); g.paused = was; session.step(1); },
     cast: function (slot, x, y) { return !cmd({ t: 'cast', s: slot, x: x, y: y }); },
     cmd: function (c) { return cmd(c); },
     get game() { return world; },

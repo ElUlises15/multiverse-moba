@@ -51,6 +51,21 @@ Cómo funciona por dentro:
 
 **GitHub Pages:** el juego está publicado en https://elulises15.github.io/multiverse-moba/ (la rama `main`, carpeta raíz). Como es todo estático, no hace falta nada más. El link de la sala que genera el juego apunta a esa dirección (si abriste el juego como archivo local, igual comparte el link publicado, así tus amigos no necesitan bajarse nada).
 
+### Conexión entre redes distintas (STUN/TURN)
+
+Los navegadores intentan conectarse **directo** (con ayuda de STUN). Cuando los routers no lo permiten (CGNAT, NAT simétrico, redes de oficina), el juego usa un **relé TURN** que pasa los datos. El TURN que traía PeerJS por defecto ya no existe; por eso antes muchas uniones se quedaban en "Conectando…" para siempre.
+
+- Servidores que se usan (todo en `js/net.js`, objeto `Net.ICE`): STUN de Google y Cloudflare, TURN público gratuito `turn.evan-brass.net` (UDP/TCP/TLS 443) y credenciales TURN temporales de `turn.elixir-webrtc.org` (se piden al conectar; si fallan, se sigue sin ellas).
+- **Tu propio TURN:** agregá una entrada en `Net.ICE.servers`, por ejemplo `{ urls: ['turn:mi-turn.example.com:3478', 'turns:mi-turn.example.com:443?transport=tcp'], username: 'yo', credential: 'clave' }` (Metered, ExpressTURN o tu propio coturn).
+- En la sala se ve si la conexión quedó **directa P2P** o **por relé TURN**, con la latencia.
+- Para probar el relé: agregá `?relay=1` a la dirección (fuerza usar solo TURN).
+- Al unirte se muestran las etapas (servidor → sala → conexión). Si en 15 s no conecta, aparece un mensaje con las causas posibles y **Reintentar**. Si el código no existe: "La sala no existe o el anfitrión cerró la pestaña".
+- El anfitrión ve "Esperando jugadores…", un aviso si su pestaña queda en segundo plano, y se reconecta solo al servidor de salas si se corta.
+
+### Después de la partida
+
+Al terminar aparecen **Volver a la sala (revancha)** —el anfitrión vuelve a la misma sala con los mismos amigos y puede empezar otra— y **Menú principal**. Todo se cierra prolijo (conexiones, simulación, escena 3D, `?sala=` de la dirección), así que se puede crear o unirse a otra sala sin recargar la página. Si el anfitrión abandona, los demás vuelven al menú con un aviso.
+
 ### Controles
 
 | Tecla | Acción |

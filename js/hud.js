@@ -315,7 +315,8 @@
       };
     }
 
-    showEnd(winner, onRestart) {
+    showEnd(winner, buttons) {
+      if (typeof buttons === 'function') buttons = [{ text: 'Menú principal', fn: buttons }];
       const g = this.game, win = winner === this.p.team;
       const el = $('endscreen');
       el.classList.remove('hidden');
@@ -326,8 +327,8 @@
       el.innerHTML = '<div class="panel"><h1 class="' + (win ? 'win' : 'lose') + '">' + (win ? '¡VICTORIA!' : 'DERROTA') + '</h1>' +
         '<div style="margin-bottom:10px;color:#9fb0d0">Duración: ' + U.fmtTime(g.time) + ' · Azul ' + g.score[0] + ' — ' + g.score[1] + ' Rojo</div>' +
         '<table style="margin:0 auto 14px;font-size:13px;border-collapse:collapse"><tr style="color:#9fb0d0"><td>Campeón</td><td>Rol</td><td>Nivel</td><td>A/M/As</td><td>Súbditos</td></tr>' + rows + '</table>' +
-        '<button id="restart-btn">Volver a la selección</button></div>';
-      $('restart-btn').onclick = onRestart;
+        '<div id="end-note" class="end-note"></div><div class="end-btns">' + buttons.map(function (b, i) { return '<button data-end="' + i + '"' + (i === 0 ? ' id="restart-btn"' : '') + '>' + b.text + '</button>'; }).join('') + '</div></div>';
+      el.querySelectorAll('[data-end]').forEach(function (btn) { btn.onclick = function () { buttons[+btn.dataset.end].fn(); }; });
     }
   }
 
