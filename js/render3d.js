@@ -909,6 +909,30 @@
         ctx.fillStyle = 'rgb(' + col + ')'; ctx.fillText(danger ? '⚠' : '!', s.x, s.y - 24);
         if (pg.who) { ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(pg.who, s.x, s.y + 22); }
         ctx.globalAlpha = 1;
+        // fuera de pantalla: flecha en el borde apuntando hacia la señal
+        const m = 46;
+        if (s.behind || s.x < m || s.y < m || s.x > this.W - m || s.y > this.H - m) {
+          const cx = this.W / 2, cy = this.H / 2;
+          let dx = s.x - cx, dy = s.y - cy;
+          if (s.behind) { dx = -dx; dy = -dy; }
+          const k = Math.min((cx - m) / Math.max(1, Math.abs(dx)), (cy - m) / Math.max(1, Math.abs(dy)));
+          const ex = cx + dx * k, ey = cy + dy * k, ang = Math.atan2(dy, dx);
+          ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang); ctx.globalAlpha = a;
+          ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.beginPath(); ctx.arc(0, 0, 20, 0, 6.283); ctx.fill();
+          ctx.fillStyle = 'rgb(' + col + ')';
+          ctx.beginPath(); ctx.moveTo(30, 0); ctx.lineTo(16, -9); ctx.lineTo(16, 9); ctx.closePath(); ctx.fill();
+          ctx.rotate(-ang); ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(danger ? '⚠' : '!', 0, 1);
+          ctx.restore();
+          ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
+        }
+      }
+      // unidad seleccionada (panel de objetivo): aro amarillo punteado
+      const sel = this.selectedUnit;
+      if (sel && !sel.dead) {
+        const s = this.worldToScreen(sel.x, sel.y, 0), rr = (sel.radius || 50) * this.cam.zoom * 1.25;
+        ctx.save(); ctx.setLineDash([6, 5]); ctx.strokeStyle = 'rgba(255,228,90,0.95)'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.ellipse(s.x, s.y, rr, rr * 0.6, 0, 0, 6.283); ctx.stroke(); ctx.restore();
       }
     }
     drawChampionBar(ctx, c, s) {

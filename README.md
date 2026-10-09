@@ -20,6 +20,13 @@ Las dos librerías están copiadas dentro del proyecto (`vendor/`), así que el 
 - **Menú de configuración** (⚙ o Esc): cambiás cualquier tecla, modo de lanzamiento, modos para daltonismo, colores de equipo, cámara, gráficos, interfaz y volumen.
 - **Pulido:** indicador de último golpe en los súbditos, números de daño que "saltan", sacudón al recibir golpes, zoom suave, señales (pings) para tu equipo, tooltips con el valor de cada rango resaltado y bots que compran siguiendo las rutas.
 
+### Novedades: interfaz estilo LoL
+- **Anuncios grandes en el centro** con retratos del que mató y del que murió, voz en texto y sonido propio: *¡Has asesinado a un enemigo!*, *¡Un enemigo ha sido asesinado!*, *¡Un aliado ha sido asesinado!*, *¡Has sido asesinado!*, *¡Primera sangre!*, asesinato doble/triple/cuádruple/pentakill, rachas y *¡Racha cortada!*, torres destruidas, *¡Tu nexo está bajo ataque!* y *¡As!*. El texto siempre está desde tu punto de vista, el color depende del equipo y los anuncios hacen fila para no pisarse.
+- **Registro de asesinatos** a la derecha con retratos, y arriba a la derecha tus asesinatos/muertes/asistencias, súbditos, el reloj y las bajas de cada equipo.
+- **Panel del objetivo** (arriba a la izquierda): hacé clic izquierdo en cualquier unidad (o atacala, o pasá el mouse) y ves su retrato, nivel, vida y maná con números, daño, poder, armadura, resistencia mágica, velocidad de ataque, velocidad, crítico, alcance, objetos y efectos con su tiempo. El clic izquierdo selecciona sin atacar; Esc o un clic en el piso lo cierra.
+- **Marcos de aliados** a la izquierda (vida, maná, nivel, si tienen la R lista y cuánto les falta para reaparecer), efectos activos arriba de las habilidades, **resumen de muerte** (quién te pegó y con qué en los últimos 15 s), tabla con Tab mejorada (objetos, KDA y súbditos), flechas en el borde de la pantalla para las señales de aliados que quedan fuera de vista, borde rojo cuando tenés poca vida y destello al subir de nivel. Todo respeta la escala de la interfaz y los modos para daltonismo.
+- **Compra inteligente:** doble clic o clic derecho en un objeto que no te alcanza compra las partes de la receta que sí podés pagar, de la más barata a la más cara (respeta lo que ya tenés, los espacios del inventario y la regla de las botas). Te avisa: *No te alcanza para X: compraste Y y Z (faltan N de oro)*. Si no te alcanza para nada, la tienda se sacude y dice *Oro insuficiente*. Cada objeto muestra *Te faltan N de oro*.
+
 En la pantalla de inicio tenés tres pestañas:
 
 | Pestaña | Qué hace |
@@ -207,7 +214,7 @@ El motor 3D, la integración, el mapa, el multijugador, la tienda, la configurac
 ### Tienda y recetas
 - Cada objeto armado tiene **componentes**. Por ejemplo, *Cuchilla Negra* = Martillo de Guerra (Espada + Espada) + Gema Avivadora (Rubí) + 950 de oro.
 - **Regla de LoL:** al comprar, los componentes que ya tenés (aunque estén adentro de otro intermedio tuyo) se consumen y pagás solo lo que falta. Cuchilla Negra sale 3000 si no tenés nada, y 1900 si ya tenés Espada, Espada y Rubí.
-- **La tienda** tiene categorías (recomendados para tu rol, todos, básicos, intermedios, legendarios, botas), un árbol con lo que ya tenés en verde, "sirve para", el precio con descuento, comprar con clic derecho, vender y **Deshacer** (la última compra o venta, mientras sigas en la base).
+- **La tienda** tiene categorías (recomendados para tu rol, todos, básicos, intermedios, legendarios, botas), un árbol con lo que ya tenés en verde, "sirve para", el precio con descuento, comprar con doble clic o clic derecho (si no te alcanza, compra las partes que sí), vender y **Deshacer** (la última compra o venta, mientras sigas en la base).
 - **Pasivas únicas:** Cuchilla Negra (cada golpe a un campeón le baja la armadura), Filo del Infinito (críticos 40 % más fuertes), Hidra (golpe en área cuerpo a cuerpo), Huracán (2 rayos extra a distancia), Sombrero (+30 % de poder), Eco (daño extra en tu próxima habilidad, cada 6 s), Égida (quema alrededor), Malla de Espinas (devuelve daño), Rostro Espiritual (+25 % de curas y escudos), Botas de Acero (−12 % de daño de básicos), Botas de Mercurio (tenacidad).
 - **Los bots** compran siguiendo una ruta por rol: primero componentes, después los arman.
 

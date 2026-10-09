@@ -80,13 +80,19 @@
         <span class="team-score red" id="score-red">0</span>
       </div>
       <button id="hud-gear" class="gear-btn" title="Configuración (teclas, cámara, audio, daltonismo…)">⚙</button>
-      <div id="killfeed"></div>
+      <div id="right-col"><div id="kda-box"></div><div id="kill-portraits"></div><div id="killfeed"></div></div>
+      <div id="target-panel" class="hidden"></div>
+      <div id="ally-frames"></div>
+      <div id="announce" class="hidden"></div>
+      <div id="death-recap" class="hidden"></div>
+      <div id="vignette"></div><div id="lvl-flash"></div>
       <div id="bottom-panel">
         <div id="portrait-wrap">
           <canvas id="portrait-canvas" width="84" height="84"></canvas>
           <div id="level-badge">1</div>
         </div>
         <div id="center-panel">
+          <div id="my-buffs"></div>
           <div id="skill-points"></div>
           <div id="abilities"></div>
           <div class="bar hp"><div class="fill"></div><div class="shield"></div><span></span></div>
@@ -176,6 +182,7 @@
   <script src="js/render3d.js"></script>
   <script src="js/portraits.js"></script>
   <script src="js/hud.js"></script>
+  <script src="js/hud_extra.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/lobby.js"></script>
   <script src="js/main.js"></script>

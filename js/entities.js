@@ -62,7 +62,7 @@
           b.tick = (b.tick || 0) + dt;
           if (b.tick >= 0.5) {
             b.tick -= 0.5;
-            game.damage(b.source, this, b.amount * 0.5, 'magic');
+            game.damage(b.source, this, b.amount * 0.5, 'magic', { label: b.label || 'Daño en el tiempo' });
             if (this.dead) return;
           }
         }

@@ -107,6 +107,21 @@
     return world.pickTarget(w.x, w.y, targetRadius(), p.team, { championsOnly: shiftHeld });
   }
 
+  /** Cualquier unidad visible bajo el mouse (aliada, enemiga, neutral, estructura) para el panel de objetivo. */
+  function pickAny(w) {
+    if (!world || !renderer) return null;
+    let best = null, bd = Infinity;
+    const r = targetRadius();
+    for (const u of world.units.concat(world.champions)) {
+      if (u.dead || u.hiddenLocal) continue;
+      const v = renderer.views.get(u.id);
+      if (v && !v.root.visible) continue;
+      const d = Math.hypot(u.x - w.x, u.y - w.y) - (u.radius || 40);
+      if (d < r && d < bd) { bd = d; best = u; }
+    }
+    return best;
+  }
+
   function issueRightClick(allowAttack) {
     const p = me();
     if (!p || p.dead || world.over) return;
@@ -209,6 +224,9 @@
       } else if (e.button === 0 && attackArmed) {
         attackArmed = false;
         attackMoveTo(worldMouse());
+      } else if (e.button === 0 && hud && hud.extra) {
+        // clic izquierdo: seleccionar una unidad (sin atacar) para ver su panel; en el suelo, deselecciona
+        hud.extra.select(pickAny(worldMouse()));
       }
     });
     window.addEventListener('mouseup', function (e) { if (e.button === 2) rightHeld = false; });
@@ -247,6 +265,7 @@
       shiftHeld = e.shiftKey;
       if (code === 'Escape') {
         if (aiming != null || attackArmed) { setAiming(null); attackArmed = false; return; }
+        if (hud && hud.extra && hud.extra.selected && $('shop').classList.contains('hidden')) { hud.extra.select(null); return; }
         if (!$('shop').classList.contains('hidden')) hud.toggleShop(false); else togglePause();
         return;
       }
@@ -393,6 +412,8 @@
     get session() { return session; },
     get renderer() { return renderer; },
     hoverTarget: function () { return hoverTarget(); },
+    hud: function () { return hud; },
+    pickAny: function (x, y) { return pickAny({ x: x, y: y }); },
     get aiming() { return aiming; }
   };
 

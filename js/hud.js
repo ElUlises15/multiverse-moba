@@ -26,6 +26,7 @@
       this.shopTab = 'rec'; this.shopSel = null;
       this.lastLevel = session.world.player.level; this.lastGold = session.world.player.gold;
       this.build();
+      this.extra = new M.HudExtra(this);
       this.settingsFn = (k) => { if (k === 'keys' || k === '*') this.refreshKeys(); };
       M.Settings.on(this.settingsFn);
     }
@@ -99,7 +100,30 @@
       return html;
     }
 
-    showNotice(text) { this.notice = text; this.noticeUntil = this.game.time + 6; }
+    showNotice(text) {
+      this.notice = text; this.noticeUntil = this.game.time + 6;
+      if (!$('shop').classList.contains('hidden')) this.shopResult(text);
+    }
+    /** Resultado de una compra (toast en la tienda). Si no compró nada: sacudón rojo + "Oro insuficiente". */
+    shopResult(text, card) {
+      const ok = /^✔/.test(text || '');
+      this.shopMsg = text || '';
+      this.shopToast = { text: (text || '').replace(/^✔\s*/, ''), ok: ok, until: performance.now() + 4500 };
+      if (M.Audio) M.Audio.sfx(ok ? 'buy' : 'error');
+      this.renderShop(true);
+      if (!ok) {
+        const el = $('shop');
+        el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+        const c = card && el.querySelector('[data-sel="' + card + '"].scard'); if (c) c.classList.add('flash-red');
+      }
+    }
+    /** Doble clic o clic derecho en un objeto: lo compra; si no alcanza, compra los componentes que sí podés. */
+    smartBuy(id) {
+      this.shopSel = id;
+      const res = this.session.cmd({ t: 'buyPartial', item: id });
+      if (res == null) { if (!this.session.local) { this.shopMsg = 'Comprando…'; this.renderShop(true); } return; }   // en red: la respuesta llega como aviso
+      this.shopResult(res, id);
+    }
     showTooltip(el, html) {
       const t = $('tooltip');
       t.innerHTML = html; t.classList.remove('hidden');
@@ -142,6 +166,7 @@
       this.xpFill.style.width = (p.level >= 18 ? 100 : p.xp / p.xpToNext() * 100) + '%';
 
       this.renderer.drawMinimap(this.mctx, 220);
+      this.extra.update(dt);
       // sonidos de la interfaz: subir de nivel, comprar/vender
       if (p.level > this.lastLevel && M.Audio) M.Audio.sfx('levelup');
       this.lastLevel = p.level;
@@ -158,6 +183,7 @@
       $('gold').textContent = Math.floor(p.gold);
       const fps = $('fps');
       if (fps) { const on = !!M.Settings.get('showFps'); fps.style.display = on ? '' : 'none'; if (on) fps.textContent = Math.round(this.renderer.fps) + ' FPS'; }
+      this.extra.slowUpdate();
       $('stats').innerHTML =
         '<span>Daño <b>' + Math.round(p.ad) + '</b></span><span>Poder <b>' + Math.round(p.ap) + '</b></span>' +
         '<span>Armadura <b>' + Math.round(p.getArmor()) + '</b></span><span>Res. mág. <b>' + Math.round(p.getMr()) + '</b></span>' +
@@ -178,7 +204,7 @@
         $('items').innerHTML = items;
       }
       // feed
-      const feed = g.feed.filter(function (f) { return g.time - f.time < 9; }).slice(-6);
+      const feed = g.feed.filter(function (f) { return g.time - f.time < 9 && !(f.ann && f.ann.k === 'kill'); }).slice(-5);
       $('killfeed').innerHTML = feed.map(function (f) { return '<div class="feed-item" style="border-color:' + f.color + '">' + f.text + '</div>'; }).join('');
       // muerte
       const d = $('death-overlay');
@@ -197,12 +223,21 @@
 
     renderScoreboard() {
       const g = this.game, p = this.p;
-      let html = '<table><tr><th>Campeón</th><th>Rol</th><th>Nivel</th><th>A/M/As</th><th>Súbditos</th><th>Oro</th><th>Objetos</th></tr>';
-      for (const c of g.champions) {
-        html += '<tr class="t' + c.team + (c === p ? ' me' : '') + '"><td>' + c.name + (c.human ? ' <span class="pn">(' + (c.playerName || 'jugador') + ')</span>' : ' <span class="pn">(bot)</span>') + (c.dead ? ' ☠' : '') + '</td><td>' + c.def.role + '</td><td>' + c.level +
-          '</td><td>' + c.kills + '/' + c.deaths + '/' + c.assists + '</td><td>' + c.cs + '</td><td>' + Math.floor(c.gold) + '</td><td>' + c.items.length + '</td></tr>';
+      let html = '<div class="sb-head"><span style="color:' + M.TEAM_COLORS[0] + '">Azul ' + g.score[0] + '</span> — <span style="color:' + M.TEAM_COLORS[1] + '">' + g.score[1] + ' Rojo</span> · ' + U.fmtTime(g.time) + '</div>';
+      html += '<table><tr><th></th><th>Campeón</th><th>Nv</th><th>A/M/As</th><th>CS</th><th>Oro</th><th>Objetos</th></tr>';
+      for (const team of [0, 1]) {
+        const list = g.champions.filter(function (c) { return c.team === team; });
+        const kills = list.reduce(function (a, c) { return a + c.kills; }, 0), gold = list.reduce(function (a, c) { return a + c.items.reduce(function (s, id) { return s + M.itemById[id].cost; }, 0); }, 0);
+        html += '<tr class="sb-team t' + team + '"><td colspan="7">Equipo ' + M.TEAM_NAMES[team] + ' · ' + kills + ' asesinatos · ' + gold + ' de oro en objetos</td></tr>';
+        for (const c of list) {
+          let items = '';
+          for (let i = 0; i < M.MAX_ITEMS; i++) items += '<span class="sb-it">' + (c.items[i] ? '<img src="' + M.Portraits.itemIcon(c.items[i], 32) + '" title="' + U.escapeHtml(M.itemName(c.items[i])) + '">' : '') + '</span>';
+          html += '<tr class="t' + c.team + (c === p ? ' me' : '') + (c.dead ? ' dead' : '') + '"><td><img class="sb-pic" src="' + M.unitIcon(c) + '">' + (c.dead ? '<span class="sb-rt">' + Math.ceil(c.respawnTimer || 0) + '</span>' : '') + '</td><td>' + c.name +
+            (c.human ? ' <span class="pn">(' + U.escapeHtml(c.playerName || 'jugador') + ')</span>' : ' <span class="pn">(bot)</span>') + '<div class="pn">' + c.def.role + '</div></td><td>' + c.level +
+            '</td><td><b>' + c.kills + '/' + c.deaths + '/' + c.assists + '</b></td><td>' + c.cs + '</td><td>' + (c.team === p.team ? Math.floor(c.gold) : '—') + '</td><td class="sb-items">' + items + '</td></tr>';
+        }
       }
-      html += '</table><div style="text-align:center;margin-top:8px;color:#9fb0d0;font-size:12px">Azul ' + g.score[0] + ' — ' + g.score[1] + ' Rojo · ' + U.fmtTime(g.time) + '</div>';
+      html += '</table>';
       $('scoreboard').innerHTML = html;
     }
 
@@ -237,7 +272,7 @@
       const g = this.game, p = this.p, el = $('shop');
       const can = g.canShop(p);
       const undoN = p.undo ? p.undo.length : (p.undoCount || 0);
-      const key = Math.floor(p.gold) + '|' + p.items.join(',') + '|' + can + '|' + (this.shopMsg || '') + '|' + this.shopTab + '|' + this.shopSel + '|' + undoN;
+      const key = Math.floor(p.gold) + '|' + p.items.join(',') + '|' + can + '|' + (this.shopMsg || '') + (this.shopToast && this.shopToast.until > performance.now() ? 'T' : '') + '|' + this.shopTab + '|' + this.shopSel + '|' + undoN;
       if (!full && key === this.shopKey) return;
       this.shopKey = key;
       const role = p.def.role, rec = M.RECOMMENDED[role] || [];
@@ -254,14 +289,16 @@
       const card = (it) => {
         const plan = M.purchasePlan(p.items, it.id), err = M.canBuy(p, it.id, can);
         const disc = plan.cost < it.cost;
-        return '<div class="scard' + (it.id === this.shopSel ? ' sel' : '') + (err ? ' cant' : '') + (rec.indexOf(it.id) >= 0 ? ' rec' : '') + '" data-sel="' + it.id + '" title="Clic: ver · Clic derecho: comprar">' +
+        const short = err === 'No te alcanza el oro' ? Math.ceil(plan.cost - p.gold) : 0;
+        return '<div class="scard' + (it.id === this.shopSel ? ' sel' : '') + (err ? ' cant' : '') + (rec.indexOf(it.id) >= 0 ? ' rec' : '') + '" data-sel="' + it.id + '" title="Clic: ver · Doble clic o clic derecho: comprar (si no te alcanza, compra las partes que sí)">' +
           '<img src="' + M.Portraits.itemIcon(it.id, 64) + '"><div class="sname">' + M.itemName(it.id) + '</div>' +
-          '<div class="scost' + (disc ? ' disc' : '') + '">' + (disc ? '<s>' + it.cost + '</s> ' : '') + plan.cost + '</div></div>';
+          '<div class="scost' + (disc ? ' disc' : '') + '">' + (disc ? '<s>' + it.cost + '</s> ' : '') + plan.cost + '</div>' + (short && can ? '<div class="sshort">Te faltan ' + short + '</div>' : '') + '</div>';
       };
       let html = '<div class="shop-head"><h2>Tienda</h2><div class="shop-gold">🪙 ' + Math.floor(p.gold) + ' oro · ' + p.items.length + '/' + M.MAX_ITEMS + ' objetos</div>' +
         '<button data-undo="1"' + (undoN && can ? '' : ' disabled') + ' title="Deshace tu última compra o venta (mientras sigas en la base)">↶ Deshacer</button>' +
         '<button class="close-btn" data-close="1">Cerrar (' + M.Settings.label('shop') + ')</button></div>' +
-        '<div class="shop-note">' + U.escapeHtml(this.shopMsg || (can ? 'Clic derecho sobre un objeto para comprarlo. Los componentes que ya tenés se descuentan del precio.' : 'Tenés que estar en la base (o muerto) para comprar.')) + '</div>' +
+        '<div class="shop-note">' + U.escapeHtml(can ? 'Doble clic o clic derecho para comprar. Si no te alcanza, se compran las partes de la receta que sí podés pagar (de la más barata a la más cara).' : 'Tenés que estar en la base (o muerto) para comprar.') + '</div>' +
+        (this.shopToast && this.shopToast.until > performance.now() ? '<div class="shop-toast ' + (this.shopToast.ok ? 'ok' : 'bad') + '">' + U.escapeHtml(this.shopToast.ok ? this.shopToast.text : (/Oro insuficiente/.test(this.shopToast.text) ? this.shopToast.text : this.shopToast.text)) + '</div>' : '') +
         '<div class="shop-tabs">' + SHOP_TABS.map((t) => '<button data-tab="' + t[0] + '" class="' + (t[0] === this.shopTab ? 'active' : '') + '">' + t[1] + (t[0] === 'rec' ? ' (' + role + ')' : '') + '</button>').join('') + '</div>' +
         '<div class="shop-body"><div class="shop-list">';
       if (this.shopTab === 'rec') {
@@ -282,7 +319,8 @@
         (it.into.length ? '<div class="shop-sec">Sirve para</div><div class="into">' + it.into.map(function (x) { return '<div class="tcard" data-sel="' + x + '" title="' + U.escapeHtml(M.itemName(x)) + '"><img src="' + M.Portraits.itemIcon(x, 48) + '"><span>' + M.itemById[x].cost + '</span></div>'; }).join('') + '</div>' : '') +
         '<div class="dprice">Costo total ' + it.cost + (plan.cost < it.cost ? ' · <b>a vos te sale ' + plan.cost + '</b> (usa ' + plan.consume.length + ' componente' + (plan.consume.length === 1 ? '' : 's') + ' tuyo' + (plan.consume.length === 1 ? '' : 's') + ')' : '') + '</div>' +
         '<button class="buy-btn" data-buy="' + it.id + '"' + (err ? ' disabled title="' + U.escapeHtml(err) + '"' : '') + '>Comprar (' + plan.cost + ')</button>' +
-        (err && can ? '<div class="derr">' + U.escapeHtml(err) + '</div>' : '') + '</div></div>';
+        (err && can ? '<div class="derr">' + U.escapeHtml(err === 'No te alcanza el oro' ? 'Te faltan ' + Math.ceil(plan.cost - p.gold) + ' de oro' : err) + '</div>' : '') +
+        (err === 'No te alcanza el oro' && can ? '<button class="buy-btn partial" data-partial="' + it.id + '">Comprar las partes que me alcanzan</button>' : '') + '</div></div>';
       // inventario
       html += '<div class="shop-inv"><span>Inventario (vender al ' + Math.round(M.SELL_RATIO * 100) + '%):</span>';
       for (let i = 0; i < M.MAX_ITEMS; i++) {
@@ -296,22 +334,32 @@
       const act = (b) => {
         if (b.dataset.close) { this.toggleShop(false); return; }
         if (b.dataset.tab) { this.shopTab = b.dataset.tab; }
-        if (b.dataset.buy) this.shopMsg = this.session.cmd({ t: 'buy', item: b.dataset.buy }) || '';
-        if (b.dataset.sell) this.shopMsg = this.session.cmd({ t: 'sell', i: +b.dataset.sell }) || '';
-        if (b.dataset.undo) this.shopMsg = this.session.cmd({ t: 'undo' }) || '';
-        if (this.shopMsg && M.Audio) M.Audio.sfx('error');
+        if (b.dataset.partial) { this.smartBuy(b.dataset.partial); return; }
+        let err = null;
+        if (b.dataset.buy) err = this.session.cmd({ t: 'buy', item: b.dataset.buy });
+        if (b.dataset.sell) err = this.session.cmd({ t: 'sell', i: +b.dataset.sell });
+        if (b.dataset.undo) err = this.session.cmd({ t: 'undo' });
+        if (err && err !== 'no') { this.shopResult(err === 'No te alcanza el oro' ? 'Oro insuficiente' : err, b.dataset.buy); return; }
         this.renderShop(true);
       };
       el.onclick = (e) => {
         const b = e.target.closest('button');
         if (b) { act(b); return; }
         const sel = e.target.closest('[data-sel]');
-        if (sel) { this.shopSel = sel.dataset.sel; this.shopMsg = ''; if (M.Audio) M.Audio.sfx('click'); this.renderShop(true); }
+        if (sel) this.lastSelClick = performance.now();
+        if (sel && sel.dataset.sel !== this.shopSel) { this.shopSel = sel.dataset.sel; this.shopMsg = ''; if (M.Audio) M.Audio.sfx('click'); this.renderShop(true); }
       };
       el.oncontextmenu = (e) => {
         e.preventDefault();
         const sel = e.target.closest('[data-sel]');
-        if (sel) { this.shopSel = sel.dataset.sel; this.shopMsg = this.session.cmd({ t: 'buy', item: sel.dataset.sel }) || ''; if (this.shopMsg && M.Audio) M.Audio.sfx('error'); this.renderShop(true); }
+        if (sel) this.smartBuy(sel.dataset.sel);
+      };
+      el.ondblclick = (e) => {
+        const sel = e.target.closest('[data-sel]');
+        // el primer clic re-dibuja la tienda, así que el objetivo del doble clic puede ser el contenedor: usamos la selección
+        if (e.target.closest('.shop-inv') || e.target.closest('button')) return;
+        const id = sel ? sel.dataset.sel : (performance.now() - (this.lastSelClick || 0) < 600 ? this.shopSel : null);
+        if (id && M.itemById[id]) this.smartBuy(id);
       };
     }
 

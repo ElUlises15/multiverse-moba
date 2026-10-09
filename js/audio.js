@@ -228,6 +228,16 @@ window.MOBA = window.MOBA || {};
         case 'danger': tone(t, 700, 0, 0.12, 'square', 0.15); tone(t + 0.14, 500, 0, 0.18, 'square', 0.15); break;
         case 'error': tone(t, 200, 150, 0.15, 'square', 0.12); break;
         case 'click': tone(t, 1800, 0, 0.03, 'square', 0.06); break;
+        // anuncios estilo LoL (cada uno con su "firma")
+        case 'ann_kill': [523, 784, 1047, 1568].forEach(function (f, i) { tone(t + i * 0.07, f, 0, 0.4, 'square', 0.12); }); tone(t, 110, 55, 0.5, 'sawtooth', 0.2); break;
+        case 'ann_good': [659, 880, 1175].forEach(function (f, i) { tone(t + i * 0.08, f, 0, 0.35, 'triangle', 0.18); }); break;
+        case 'ann_bad': [622, 466, 349].forEach(function (f, i) { tone(t + i * 0.1, f, 0, 0.4, 'triangle', 0.18); }); break;
+        case 'ann_death': tone(t, 392, 98, 0.9, 'sawtooth', 0.22); tone(t + 0.05, 196, 49, 1.0, 'sine', 0.3); noise(t, 0.5, 300, 0.3, 'lowpass'); break;
+        case 'ann_first': tone(t, 98, 40, 0.8, 'sawtooth', 0.3); noise(t, 0.4, 500, 0.4, 'lowpass'); [440, 554, 659, 880].forEach(function (f, i) { tone(t + 0.15 + i * 0.09, f, 0, 0.45, 'square', 0.12); }); break;
+        case 'ann_multi': [523, 659, 784, 1047, 1319, 1568].forEach(function (f, i) { tone(t + i * 0.05, f, 0, 0.3, 'square', 0.11); }); tone(t, 80, 40, 0.6, 'sawtooth', 0.3); break;
+        case 'ann_tower': tone(t, 140, 35, 0.9, 'sawtooth', 0.3); noise(t, 0.8, 400, 0.5, 'lowpass'); break;
+        case 'ann_ace': [392, 523, 659, 784, 1047].forEach(function (f, i) { tone(t + i * 0.1, f, 0, 0.6, 'triangle', 0.18); }); break;
+        case 'ann_alert': for (let i = 0; i < 3; i++) tone(t + i * 0.18, 880, 660, 0.14, 'square', 0.14); break;
       }
     }
   };

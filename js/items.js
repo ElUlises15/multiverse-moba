@@ -121,6 +121,44 @@
     return null;
   };
   M.MAX_ITEMS = 6;
+  /** Compra parcial inteligente: si no te alcanza para `id`, qué componentes que faltan SÍ podés comprar.
+   *  Recorre la receta: los componentes que faltan, del más barato al más caro; si uno no te alcanza, baja a sus partes.
+   *  Respeta lo que ya tenés (no se compra dos veces lo que ya está), el límite de inventario y la regla de botas.
+   *  Devuelve { buys: [ids en orden], spent, goldAfter, missing (oro que falta después para el objeto) }. */
+  M.partialBuyPlan = function (c, id) {
+    const sim = { items: c.items.slice(), gold: c.gold };
+    const buys = [];
+    let spent = 0;
+    // reparte lo que tenés entre las ramas del árbol (como purchasePlan) para saber qué componentes faltan
+    function missingKids(nodeId, pool) {
+      const it = M.itemById[nodeId], out = [];
+      for (const f of it.from || []) {
+        const own = pool.find(function (p) { return !p.used && p.id === f; });
+        if (own) own.used = true; else out.push(f);
+      }
+      return out;
+    }
+    function tryNode(nid, pool) {
+      const err = M.canBuy(sim, nid, true);
+      if (!err) {
+        const plan = M.purchasePlan(sim.items, nid);
+        for (let k = plan.consume.length - 1; k >= 0; k--) sim.items.splice(plan.consume[k], 1);
+        sim.items.push(nid); sim.gold -= plan.cost; spent += plan.cost; buys.push(nid);
+        return true;
+      }
+      if (err === 'Ya tenés botas') return false;
+      // no alcanza (o no entra): bajar a sus partes, la más barata primero
+      const kids = missingKids(nid, pool).sort(function (a, b) { return M.itemById[a].cost - M.itemById[b].cost; });
+      let any = false;
+      for (const k of kids) if (tryNode(k, pool)) any = true;
+      return any;
+    }
+    const pool = sim.items.map(function (x) { return { id: x, used: false }; });
+    const top = missingKids(id, pool).sort(function (a, b) { return M.itemById[a].cost - M.itemById[b].cost; });
+    for (const k of top) tryNode(k, pool);
+    const after = M.purchasePlan(sim.items, id);
+    return { buys: buys, spent: spent, goldAfter: sim.gold, missing: Math.max(0, Math.ceil(after.cost - sim.gold)) };
+  };
   M.SELL_RATIO = 0.7;
 
   // Recomendados por rol (los muestra la tienda) y rutas de compra de los bots (en orden de componentes → legendarios)

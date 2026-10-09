@@ -147,11 +147,11 @@
     const rank = A.rankOf(caster, ab);
     let dmg = A.value(ab.damage, caster, rank);
     if (ab.executeBonus) dmg *= 1 + ab.executeBonus * (1 - target.hp / target.maxHp);
-    if (dmg > 0) game.damage(caster, target, dmg, ab.damageType || 'magic');
+    if (dmg > 0) game.damage(caster, target, dmg, ab.damageType || 'magic', { label: ab.name });
     // Pasiva única "Eco": daño mágico extra cada 6 s
     if (dmg > 0 && caster.passives && caster.passives.echo && game.time >= (caster.echoReady || 0) && !target.dead) {
       caster.echoReady = game.time + 6;
-      game.damage(caster, target, 60 + 0.1 * caster.ap, 'magic');
+      game.damage(caster, target, 60 + 0.1 * caster.ap, 'magic', { label: 'Eco (objeto)' });
       game.pushFx({ type: 'ring', x: target.x, y: target.y, r0: 20, r1: 160, color: '#9fe8ff', life: 0.35, max: 0.35 });
     }
     if (!target.dead && ab.effects) A.applyEffects(game, caster, ab.effects, target, origin || caster, rank);

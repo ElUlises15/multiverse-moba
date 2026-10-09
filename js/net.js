@@ -248,6 +248,7 @@
       o.cd = u.cds.map(r2); o.rc = u.recalling ? r2(u.recalling.t) : 0;
       o.ad = r1(u.ad); o.ap = r1(u.ap); o.ar = r1(u.getArmor()); o.mr = r1(u.getMr()); o.as = r2(u.getAttackSpeed());
       o.ms = r1(u.getMoveSpeed()); o.cr = r2(u.critChance); o.hs = r1(u.haste); o.ls = r2(u.getLifesteal()); o.rg = u.attackRange;
+      o.bf = u.buffs.filter(function (b) { return b.remaining > 0 && b.remaining < 600; }).slice(0, 10).map(function (b) { return [b.type, r2(b.remaining), r2(b.duration || b.remaining), r2(b.amount || 0)]; });
       o.sh = r1(u.shieldAmount()); o.ca = r2(u.castAt == null ? -9 : u.castAt); o.cS = u.castSlot || 0; o.co = u.championsOnly ? 1 : 0;
     } else if (hidden) return null;
     o.x = r1(u.x); o.yy = r1(u.y); o.f = r2(u.facing);
@@ -293,7 +294,7 @@
     const fx = [], tx = [], fd = [];
     for (const f of g.fx) if (f.id > since.fx && (!f.to || f.to.indexOf(champId) >= 0)) fx.push(f);
     for (const t of g.texts) if (t.id > since.tx && (!t.to || t.to.indexOf(champId) >= 0)) tx.push({ x: r1(t.x), y: r1(t.y), text: t.text, color: t.color, big: t.big, life: t.life, max: t.max });
-    for (const f of g.feed) if (f.id > since.fd && (!f.to || f.to.indexOf(champId) >= 0)) fd.push({ text: f.text, color: f.color, time: f.time });
+    for (const f of g.feed) if (f.id > since.fd && (!f.to || f.to.indexOf(champId) >= 0)) fd.push({ text: f.text, color: f.color, time: f.time, ann: f.ann || null });
     return { fx: fx, tx: tx, fd: fd };
   };
 
@@ -384,6 +385,7 @@
         if (o.sg) u.buffs.push({ type: 'stealth', amount: 1, remaining: 1 });
         if (o.un) u.buffs.push({ type: 'undying', amount: 1, remaining: 1 });
         if (o.gr) u.buffs.push({ type: 'grow', amount: o.gr, remaining: 1 });
+        if (o.bf) u.buffs = o.bf.map(function (a) { return { type: a[0], remaining: a[1], duration: a[2], amount: a[3] }; });
         u.feared = !!o.fr;
         u.targetId = o.tg || 0;
         u.facing = o.f;
@@ -482,7 +484,7 @@
       if (msg.k === 'cmd') {
         const c = this.game.humans[cl.slot];
         const err = this.game.command(c, msg.c);
-        if (err && err !== 'no' && (msg.c.t === 'buy' || msg.c.t === 'sell')) this.transport.send(id, { k: 'msg', text: err });
+        if (err && err !== 'no' && (msg.c.t === 'buy' || msg.c.t === 'sell' || msg.c.t === 'buyPartial')) this.transport.send(id, { k: 'msg', text: err, shop: msg.c.t === 'buyPartial' });
       }
     }
     onLeave(id) {

@@ -60,7 +60,7 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: 10px; padding: 6px 18px; display: flex; gap: 18px; align-items: center; font-weight: bold; font-size: 20px; pointer-events: none; }
 .team-score.blue { color: var(--team0, #38a3ff); } .team-score.red { color: var(--team1, #ff4a4a); }
 #timer { color: #fff; font-size: 16px; min-width: 56px; text-align: center; }
-#killfeed { position: absolute; top: 10px; right: 10px; width: 340px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; align-items: flex-end; }
+#killfeed { width: 340px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; align-items: flex-end; }
 .feed-item { background: rgba(8,12,22,0.8); padding: 4px 10px; border-radius: 6px; font-size: 13px; border-left: 3px solid; }
 #bottom-panel { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; align-items: stretch;
   background: rgba(8,12,22,0.9); border: 1px solid #2c3a5c; border-radius: 12px; padding: 8px; }
@@ -187,7 +187,7 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ===== Ronda 5: escala de interfaz, configuración, tienda con árbol, FPS ===== */
 :root { --ui-scale: 1; }
-#bottom-panel, #minimap-wrap, #topbar, #killfeed, #shop, #scoreboard, #hud-gear, #fps { zoom: var(--ui-scale); }
+#bottom-panel, #minimap-wrap, #topbar, #right-col, #shop, #scoreboard, #hud-gear, #fps, #target-panel, #ally-frames, #announce, #death-recap { zoom: var(--ui-scale); }
 .gear-btn { background: rgba(8,12,22,0.85); color: #dfe8ff; border: 1px solid #3a4a70; border-radius: 8px; font-size: 20px; width: 38px; height: 38px; cursor: pointer; line-height: 1; }
 .gear-btn:hover { background: #24304f; color: #ffd54a; }
 #hud-gear { position: absolute; top: 8px; left: calc(50% + 120px); }
@@ -283,6 +283,93 @@ table.keys td { padding: 2px 3px; border-bottom: 1px solid #1a2440; }
 .end-note { color: #ffcf6a; margin: 6px 0; min-height: 4px; }
 .end-btns { display: flex; gap: 10px; justify-content: center; }
 
+/* ===== HUD estilo LoL (anuncios, objetivo, aliados, K/D/A, efectos, resumen de muerte) ===== */
+#right-col { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; pointer-events: none; }
+#kda-box { display: flex; gap: 12px; background: rgba(8,12,22,0.85); border: 1px solid #2c3a5c; border-radius: 8px; padding: 5px 12px; font-size: 13px; color: #cfe0ff; }
+#kda-box b { color: #fff; }
+#kill-portraits { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.kf-item { display: flex; align-items: center; gap: 6px; background: rgba(8,12,22,0.85); border-right: 4px solid; border-radius: 6px; padding: 3px 8px; animation: kfIn .25s ease-out; }
+.kf-item img { width: 34px; height: 34px; border-radius: 6px; border: 2px solid; background: #101a2e; object-fit: cover; }
+.kf-sw { color: #ffd54a; font-size: 16px; }
+.kf-ast { font-size: 11px; color: #9fb0d0; }
+.kf-env { font-size: 11px; color: #cfd8ea; max-width: 70px; }
+@keyframes kfIn { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+#announce { position: absolute; top: 17%; left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 30; }
+#announce.hidden { display: none; }
+#announce .ann-row { display: flex; align-items: center; gap: 14px; padding: 10px 22px; border-radius: 12px; background: linear-gradient(90deg, rgba(5,8,16,0) 0%, rgba(5,8,16,0.9) 18%, rgba(5,8,16,0.9) 82%, rgba(5,8,16,0) 100%);
+  border-top: 2px solid var(--ann-col); border-bottom: 2px solid var(--ann-col); }
+#announce.good .ann-title { color: #8fd8ff; } #announce.bad .ann-title { color: #ff8a8a; }
+#announce .ann-title { font-size: 34px; font-weight: 900; letter-spacing: 1px; text-shadow: 0 2px 6px #000, 0 0 18px var(--ann-col); white-space: nowrap; text-align: center; }
+#announce .ann-sub { font-size: 14px; color: #e8eefc; text-align: center; margin-top: 2px; text-shadow: 0 1px 3px #000; }
+#announce .ann-pic { width: 64px; height: 64px; border-radius: 50%; border: 3px solid; overflow: hidden; background: #101a2e; box-shadow: 0 0 14px var(--ann-col); }
+#announce .ann-pic img { width: 100%; height: 100%; object-fit: cover; }
+#announce .ann-pic.v img { filter: grayscale(0.7) brightness(0.7); }
+#announce.show { animation: annIn 2.6s ease-out forwards; }
+@keyframes annIn { 0% { opacity: 0; transform: translateX(-50%) scale(1.5); } 8% { opacity: 1; transform: translateX(-50%) scale(1); } 85% { opacity: 1; } 100% { opacity: 0; transform: translateX(-50%) scale(0.96); } }
+#target-panel { position: absolute; top: 10px; left: 10px; width: 300px; background: rgba(8,12,22,0.9); border: 1px solid #2c3a5c; border-radius: 10px; padding: 8px; font-size: 12px; color: #cfe0ff; pointer-events: none; }
+#target-panel.hidden { display: none; }
+.tp-head { display: flex; gap: 8px; }
+.tp-pic { position: relative; width: 56px; height: 56px; border: 2px solid; border-radius: 8px; overflow: hidden; flex: none; background: #101a2e; }
+.tp-pic img { width: 100%; height: 100%; object-fit: cover; }
+.tp-lv { position: absolute; right: 0; bottom: 0; background: #000c; color: #ffe45a; font-weight: bold; font-size: 11px; padding: 0 4px; border-top-left-radius: 5px; }
+.tp-main { flex: 1; min-width: 0; }
+.tp-name { font-weight: bold; color: #fff; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+.tp-bar { position: relative; height: 15px; background: #1a2238; border-radius: 3px; overflow: hidden; margin-bottom: 3px; }
+.tp-bar.mn { height: 11px; } .tp-bar.mn i { background: #4a7dff; }
+.tp-bar i { position: absolute; left: 0; top: 0; bottom: 0; }
+.tp-bar span { position: absolute; inset: 0; text-align: center; font-size: 10px; line-height: 15px; color: #fff; text-shadow: 0 1px 2px #000; }
+.tp-bar.mn span { line-height: 11px; font-size: 9px; }
+.tp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 10px; margin-top: 6px; }
+.tp-stats span { display: flex; justify-content: space-between; } .tp-stats em { font-style: normal; color: #8fa0c0; } .tp-stats b { color: #fff; }
+.tp-items { display: flex; gap: 3px; margin-top: 6px; }
+.tslot { width: 30px; height: 30px; border: 1px solid #2c3a5c; border-radius: 4px; background: #0d1424; } .tslot img { width: 100%; height: 100%; }
+.tp-buffs { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
+.buff { position: relative; width: 26px; height: 26px; border-radius: 5px; border: 2px solid; overflow: hidden; background: #0d1424; display: flex; align-items: center; justify-content: center; }
+.buff.big { width: 32px; height: 32px; }
+.buff.good { border-color: #5ce06b; } .buff.bad { border-color: #ff5a5a; }
+.buff .bi { font-size: 14px; color: #fff; } .buff .bt { position: absolute; right: 1px; bottom: -1px; font-size: 9px; font-weight: bold; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+.buff i { position: absolute; left: 0; right: 0; top: 0; background: rgba(0,0,0,0.55); }
+#my-buffs { display: flex; gap: 3px; justify-content: center; min-height: 0; margin-bottom: 3px; }
+#ally-frames { position: absolute; left: 10px; top: 260px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.ally { display: flex; align-items: center; gap: 5px; }
+.ally .ap { position: relative; width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--team0, #38a3ff); overflow: hidden; background: #101a2e; }
+.ally .ap img { width: 100%; height: 100%; object-fit: cover; }
+.ally.dead .ap img { filter: grayscale(1) brightness(0.45); }
+.ally .alv { position: absolute; left: 0; bottom: 0; background: #000c; font-size: 10px; color: #ffe45a; padding: 0 3px; font-weight: bold; }
+.ally .ard { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #ff8a8a; font-size: 16px; text-shadow: 0 1px 3px #000; }
+.ally .ar { position: absolute; right: 0; top: 0; background: #ffd54a; color: #000; font-size: 9px; font-weight: 900; padding: 0 3px; border-bottom-left-radius: 5px; }
+.ally .abars { width: 60px; } .ally .ahp { height: 6px; border-radius: 2px; margin-bottom: 2px; } .ally .amn { height: 3px; background: #4a7dff; border-radius: 2px; }
+#death-recap { position: absolute; left: 50%; top: calc(30% + 90px); transform: translateX(-50%); width: 420px; background: rgba(20,6,10,0.92); border: 1px solid #7a2a3a; border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #f0d8dc; pointer-events: none; }
+#death-recap.hidden { display: none; }
+.rc-title { font-size: 16px; font-weight: bold; color: #ff9a9a; margin-bottom: 4px; } .rc-total { margin-bottom: 8px; color: #e0c0c6; } .rc-key { float: right; font-size: 11px; }
+.rc-row { display: flex; gap: 8px; margin-bottom: 7px; } .rc-row > img { width: 40px; height: 40px; border-radius: 6px; background: #101a2e; flex: none; }
+.rc-body { flex: 1; } .rc-name { display: flex; justify-content: space-between; font-weight: bold; color: #fff; } .rc-name span { color: #ffb0b0; }
+.rc-bar { height: 5px; background: #3a1a22; border-radius: 3px; margin: 2px 0 3px; } .rc-bar i { display: block; height: 100%; background: #ff5a5a; border-radius: 3px; }
+.rc-part { display: flex; justify-content: space-between; color: #d8b8be; font-size: 11px; padding-left: 4px; }
+#vignette { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(200,0,0,0.55) 100%); transition: opacity .15s; }
+#lvl-flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 50% 100%, rgba(120,220,255,0.45), rgba(120,220,255,0) 60%); }
+#lvl-flash.go { animation: lvlFlash .9s ease-out; }
+@keyframes lvlFlash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+body.team-shapes .kf-item img, body.team-shapes .tp-pic { border-style: double; }
+/* tienda: compra parcial */
+.sshort { font-size: 10px; color: #ff9a8a; }
+.shop-toast { margin: 4px 12px; padding: 6px 10px; border-radius: 6px; font-size: 13px; font-weight: bold; animation: kfIn .2s ease-out; }
+.shop-toast.ok { background: #143a22; border: 1px solid #3fae63; color: #b8ffcc; }
+.shop-toast.bad { background: #3a1418; border: 1px solid #c04a55; color: #ffc4c4; }
+.buy-btn.partial { background: #2a4a7a; margin-top: 6px; }
+#shop.shake { animation: shake .4s; }
+@keyframes shake { 0%,100% { transform: translate(-50%, -50%); } 20% { transform: translate(calc(-50% - 10px), -50%); } 40% { transform: translate(calc(-50% + 10px), -50%); } 60% { transform: translate(calc(-50% - 6px), -50%); } 80% { transform: translate(calc(-50% + 6px), -50%); } }
+.scard.flash-red { animation: flashRed .6s; }
+@keyframes flashRed { 0%, 100% { box-shadow: none; } 30% { box-shadow: 0 0 0 3px #ff4a4a, 0 0 18px #ff4a4a; background: #4a1a1f; } }
+/* marcador */
+#scoreboard .sb-head { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 6px; }
+#scoreboard .sb-team td { text-align: left; color: #9fb0d0; font-size: 12px; padding-top: 8px; }
+#scoreboard .sb-pic { width: 34px; height: 34px; border-radius: 6px; background: #101a2e; vertical-align: middle; }
+#scoreboard tr.dead .sb-pic { filter: grayscale(1) brightness(0.5); }
+#scoreboard .sb-rt { position: relative; left: -24px; color: #ff8a8a; font-weight: bold; }
+#scoreboard .sb-items { white-space: nowrap; } #scoreboard .sb-it { display: inline-block; width: 26px; height: 26px; border: 1px solid #2c3a5c; border-radius: 4px; margin-right: 2px; vertical-align: middle; background: #0d1424; }
+#scoreboard .sb-it img { width: 100%; height: 100%; }
+
 </style>
 </head>
 <body>
@@ -358,13 +445,19 @@ table.keys td { padding: 2px 3px; border-bottom: 1px solid #1a2440; }
         <span class="team-score red" id="score-red">0</span>
       </div>
       <button id="hud-gear" class="gear-btn" title="Configuración (teclas, cámara, audio, daltonismo…)">⚙</button>
-      <div id="killfeed"></div>
+      <div id="right-col"><div id="kda-box"></div><div id="kill-portraits"></div><div id="killfeed"></div></div>
+      <div id="target-panel" class="hidden"></div>
+      <div id="ally-frames"></div>
+      <div id="announce" class="hidden"></div>
+      <div id="death-recap" class="hidden"></div>
+      <div id="vignette"></div><div id="lvl-flash"></div>
       <div id="bottom-panel">
         <div id="portrait-wrap">
           <canvas id="portrait-canvas" width="84" height="84"></canvas>
           <div id="level-badge">1</div>
         </div>
         <div id="center-panel">
+          <div id="my-buffs"></div>
           <div id="skill-points"></div>
           <div id="abilities"></div>
           <div class="bar hp"><div class="fill"></div><div class="shield"></div><span></span></div>
@@ -4893,6 +4986,16 @@ window.MOBA = window.MOBA || {};
         case 'danger': tone(t, 700, 0, 0.12, 'square', 0.15); tone(t + 0.14, 500, 0, 0.18, 'square', 0.15); break;
         case 'error': tone(t, 200, 150, 0.15, 'square', 0.12); break;
         case 'click': tone(t, 1800, 0, 0.03, 'square', 0.06); break;
+        // anuncios estilo LoL (cada uno con su "firma")
+        case 'ann_kill': [523, 784, 1047, 1568].forEach(function (f, i) { tone(t + i * 0.07, f, 0, 0.4, 'square', 0.12); }); tone(t, 110, 55, 0.5, 'sawtooth', 0.2); break;
+        case 'ann_good': [659, 880, 1175].forEach(function (f, i) { tone(t + i * 0.08, f, 0, 0.35, 'triangle', 0.18); }); break;
+        case 'ann_bad': [622, 466, 349].forEach(function (f, i) { tone(t + i * 0.1, f, 0, 0.4, 'triangle', 0.18); }); break;
+        case 'ann_death': tone(t, 392, 98, 0.9, 'sawtooth', 0.22); tone(t + 0.05, 196, 49, 1.0, 'sine', 0.3); noise(t, 0.5, 300, 0.3, 'lowpass'); break;
+        case 'ann_first': tone(t, 98, 40, 0.8, 'sawtooth', 0.3); noise(t, 0.4, 500, 0.4, 'lowpass'); [440, 554, 659, 880].forEach(function (f, i) { tone(t + 0.15 + i * 0.09, f, 0, 0.45, 'square', 0.12); }); break;
+        case 'ann_multi': [523, 659, 784, 1047, 1319, 1568].forEach(function (f, i) { tone(t + i * 0.05, f, 0, 0.3, 'square', 0.11); }); tone(t, 80, 40, 0.6, 'sawtooth', 0.3); break;
+        case 'ann_tower': tone(t, 140, 35, 0.9, 'sawtooth', 0.3); noise(t, 0.8, 400, 0.5, 'lowpass'); break;
+        case 'ann_ace': [392, 523, 659, 784, 1047].forEach(function (f, i) { tone(t + i * 0.1, f, 0, 0.6, 'triangle', 0.18); }); break;
+        case 'ann_alert': for (let i = 0; i < 3; i++) tone(t + i * 0.18, 880, 660, 0.14, 'square', 0.14); break;
       }
     }
   };
@@ -14452,6 +14555,44 @@ MOBA.registerChampion({
     return null;
   };
   M.MAX_ITEMS = 6;
+  /** Compra parcial inteligente: si no te alcanza para `id`, qué componentes que faltan SÍ podés comprar.
+   *  Recorre la receta: los componentes que faltan, del más barato al más caro; si uno no te alcanza, baja a sus partes.
+   *  Respeta lo que ya tenés (no se compra dos veces lo que ya está), el límite de inventario y la regla de botas.
+   *  Devuelve { buys: [ids en orden], spent, goldAfter, missing (oro que falta después para el objeto) }. */
+  M.partialBuyPlan = function (c, id) {
+    const sim = { items: c.items.slice(), gold: c.gold };
+    const buys = [];
+    let spent = 0;
+    // reparte lo que tenés entre las ramas del árbol (como purchasePlan) para saber qué componentes faltan
+    function missingKids(nodeId, pool) {
+      const it = M.itemById[nodeId], out = [];
+      for (const f of it.from || []) {
+        const own = pool.find(function (p) { return !p.used && p.id === f; });
+        if (own) own.used = true; else out.push(f);
+      }
+      return out;
+    }
+    function tryNode(nid, pool) {
+      const err = M.canBuy(sim, nid, true);
+      if (!err) {
+        const plan = M.purchasePlan(sim.items, nid);
+        for (let k = plan.consume.length - 1; k >= 0; k--) sim.items.splice(plan.consume[k], 1);
+        sim.items.push(nid); sim.gold -= plan.cost; spent += plan.cost; buys.push(nid);
+        return true;
+      }
+      if (err === 'Ya tenés botas') return false;
+      // no alcanza (o no entra): bajar a sus partes, la más barata primero
+      const kids = missingKids(nid, pool).sort(function (a, b) { return M.itemById[a].cost - M.itemById[b].cost; });
+      let any = false;
+      for (const k of kids) if (tryNode(k, pool)) any = true;
+      return any;
+    }
+    const pool = sim.items.map(function (x) { return { id: x, used: false }; });
+    const top = missingKids(id, pool).sort(function (a, b) { return M.itemById[a].cost - M.itemById[b].cost; });
+    for (const k of top) tryNode(k, pool);
+    const after = M.purchasePlan(sim.items, id);
+    return { buys: buys, spent: spent, goldAfter: sim.gold, missing: Math.max(0, Math.ceil(after.cost - sim.gold)) };
+  };
   M.SELL_RATIO = 0.7;
 
   // Recomendados por rol (los muestra la tienda) y rutas de compra de los bots (en orden de componentes → legendarios)
@@ -14786,7 +14927,7 @@ MOBA.registerChampion({
           b.tick = (b.tick || 0) + dt;
           if (b.tick >= 0.5) {
             b.tick -= 0.5;
-            game.damage(b.source, this, b.amount * 0.5, 'magic');
+            game.damage(b.source, this, b.amount * 0.5, 'magic', { label: b.label || 'Daño en el tiempo' });
             if (this.dead) return;
           }
         }
@@ -15114,11 +15255,11 @@ MOBA.registerChampion({
     const rank = A.rankOf(caster, ab);
     let dmg = A.value(ab.damage, caster, rank);
     if (ab.executeBonus) dmg *= 1 + ab.executeBonus * (1 - target.hp / target.maxHp);
-    if (dmg > 0) game.damage(caster, target, dmg, ab.damageType || 'magic');
+    if (dmg > 0) game.damage(caster, target, dmg, ab.damageType || 'magic', { label: ab.name });
     // Pasiva única "Eco": daño mágico extra cada 6 s
     if (dmg > 0 && caster.passives && caster.passives.echo && game.time >= (caster.echoReady || 0) && !target.dead) {
       caster.echoReady = game.time + 6;
-      game.damage(caster, target, 60 + 0.1 * caster.ap, 'magic');
+      game.damage(caster, target, 60 + 0.1 * caster.ap, 'magic', { label: 'Eco (objeto)' });
       game.pushFx({ type: 'ring', x: target.x, y: target.y, r0: 20, r1: 160, color: '#9fe8ff', life: 0.35, max: 0.35 });
     }
     if (!target.dead && ab.effects) A.applyEffects(game, caster, ab.effects, target, origin || caster, rank);
@@ -15636,8 +15777,9 @@ MOBA.registerChampion({
     }
 
     // ---------- Utilidades ----------
-    addFeed(text, color, to) {
-      this.feed.push({ id: ++this.seq, text: text, color: color || '#fff', time: this.time, to: to || null });
+    /** Aviso en el feed. `ann` (opcional) = anuncio grande estilo LoL ({ k: 'kill'|'ace'|'tower'|'nexus', … }); el texto según la perspectiva lo arma el HUD. */
+    addFeed(text, color, to, ann) {
+      this.feed.push({ id: ++this.seq, text: text, color: color || '#fff', time: this.time, to: to || null, ann: ann || null });
       if (this.feed.length > 30) this.feed.shift();
     }
     /** Texto flotante; `to` = ids de los campeones que lo ven (null = todos). */
@@ -15712,6 +15854,7 @@ MOBA.registerChampion({
           if (c.learn(cmd.s | 0)) { this.particles(c.x, c.y, '#ffe45a', 10, 250); return null; }
           return 'no';
         case 'buy': return this.buyItem(c, String(cmd.item));
+        case 'buyPartial': return this.buyPartial(c, String(cmd.item));
         case 'sell': return this.sellItem(c, cmd.i | 0);
         case 'undo': return this.undoShop(c);
         case 'ping': {
@@ -15826,6 +15969,21 @@ MOBA.registerChampion({
       c.undo.push({ t: 'buy', id: id, cost: plan.cost, consumed: consumed });
       if (c.undo.length > 20) c.undo.shift();
       return null;
+    }
+    /** Doble clic / clic derecho en un objeto que no te alcanza: compra los componentes que sí podés pagar.
+     *  Devuelve el texto para mostrar (empieza con "✔" si compró algo). */
+    buyPartial(c, id) {
+      const it = M.itemById[id];
+      if (!it) return 'Objeto inexistente';
+      const direct = M.canBuy(c, id, this.canShop(c));
+      if (!direct) { this.buyItem(c, id); return '✔ Compraste ' + M.itemName(id); }
+      if (direct !== 'No te alcanza el oro') return direct;
+      const plan = M.partialBuyPlan(c, id);
+      if (!plan.buys.length) return 'Oro insuficiente: te faltan ' + Math.ceil(M.purchasePlan(c.items, id).cost - c.gold) + ' de oro para ' + M.itemName(id);
+      for (const b of plan.buys) this.buyItem(c, b);
+      const names = plan.buys.map(function (b) { return M.itemName(b); });
+      const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' y ' + names[names.length - 1] : names[0];
+      return '✔ No te alcanza para ' + M.itemName(id) + ': compraste ' + list + ' (faltan ' + plan.missing + ' de oro)';
     }
     sellItem(c, index) {
       if (!this.canShop(c)) return 'Tenés que estar en la base para vender';
@@ -16395,7 +16553,7 @@ MOBA.registerChampion({
       // Malla de Espinas: devuelve daño mágico al atacante
       if (basic && t.passives && t.passives.thorns && src && !src.dead && src.type !== 'tower') {
         const bonusArmor = Math.max(0, t.armor - M.growth(t.def.stats.armor, t.def.stats.armorPerLevel, t.level));
-        this.damage(t, src, 20 + 0.1 * bonusArmor, 'magic', { noText: !t.human && !src.human });
+        this.damage(t, src, 20 + 0.1 * bonusArmor, 'magic', { noText: !t.human && !src.human, label: 'Malla de Espinas' });
       }
       const total = dmg;
       for (const b of t.buffs) {
@@ -16403,6 +16561,17 @@ MOBA.registerChampion({
       }
       if (t.hasBuff('undying') && t.hp - dmg < 1) dmg = Math.max(0, t.hp - 1);
       t.hp -= dmg; t.flash = 0.1; t.lastHurt = this.time; t.lastCombat = this.time;
+      // resumen de muerte: quién te pegó y con qué (últimos segundos)
+      if (t.type === 'champion' && total > 0) {
+        const r = t.recap || (t.recap = []);
+        const label = (opts && opts.label) || (basic ? (opts.crit ? 'Ataque básico (crítico)' : 'Ataque básico') : !src ? 'Fuente enemiga' : src.type === 'tower' ? 'Disparo de torre' : src.type === 'minion' ? 'Ataque de súbdito' : src.type === 'monster' ? 'Ataque de monstruo' : 'Habilidad');
+        r.push({ t: this.time, s: src ? src.id : 0, l: label, a: total, k: kind });
+        if (r.length > 80) r.shift();
+      }
+      if (t.type === 'nexus' && src && this.time - (t.lastWarn || -99) > 20) {
+        t.lastWarn = this.time;
+        this.addFeed('¡El nexo ' + M.TEAM_NAMES[t.team] + ' está bajo ataque!', M.TEAM_COLORS[1 - t.team], null, { k: 'nexus', team: t.team });
+      }
       t.lastHitBy = src ? src.id : 0;
       if (src) src.lastCombat = this.time;
       if (t.recalling && dmg > 0) t.recalling = null;
@@ -16476,10 +16645,25 @@ MOBA.registerChampion({
         }
         this.score[1 - t.team]++;
         const kc = M.TEAM_COLORS[1 - t.team];
-        if (killer) this.addFeed(killer.name + ' eliminó a ' + t.name, kc);
-        else this.addFeed(t.name + ' fue ejecutado', kc);
+        // anuncio: primera sangre, multiasesinatos (10 s entre muertes), rachas y "racha cortada"
+        const first = !!killer && !this.firstBloodDone;
+        if (first) this.firstBloodDone = true;
+        let multi = 0, spree = 0;
+        if (killer) {
+          killer.multi = this.time - (killer.lastKillAt == null ? -99 : killer.lastKillAt) <= 10 ? (killer.multi || 0) + 1 : 1;
+          killer.lastKillAt = this.time; killer.spree = (killer.spree || 0) + 1;
+          multi = killer.multi; spree = killer.spree;
+        }
+        const ended = t.spree || 0;
+        t.spree = 0; t.multi = 0;
+        const by = killer ? '' : !src ? 'la fuente' : src.type === 'tower' ? 'una torre' : src.type === 'minion' ? 'los súbditos' : src.type === 'monster' ? 'un monstruo' : '';
+        const ann = { k: 'kill', killer: killer ? killer.id : 0, by: by, victim: t.id, team: 1 - t.team, assists: helpers.map(function (a) { return a.id; }),
+          first: first, multi: multi, spree: spree, shutdown: ended >= 3 ? ended : 0, recap: this.deathRecap(t) };
+        if (killer) this.addFeed(killer.name + ' eliminó a ' + t.name, kc, null, ann);
+        else this.addFeed(t.name + ' fue ejecutado por ' + (by || 'el entorno'), kc, null, ann);
+        if (this.champions.every(function (c) { return c.team !== t.team || c.dead; })) this.addFeed('¡As! Cayó todo el equipo ' + M.TEAM_NAMES[t.team], kc, null, { k: 'ace', team: t.team });
         if (t.human) this.addFeed('Te eliminaron. Reaparecés en ' + Math.ceil(t.respawnTimer) + ' s', '#ff8a8a', [t.id]);
-        t.lastDamagers = {};
+        t.lastDamagers = {}; t.recap = [];
         this.particles(t.x, t.y, t.def.color, 30, 500);
         this.pushFx({ type: 'ring', x: t.x, y: t.y, r0: 20, r1: 300, color: tc, life: 0.6, max: 0.6 });
       } else if (t.type === 'tower') {
@@ -16491,7 +16675,7 @@ MOBA.registerChampion({
           c.gainGold(this, 50 + local, c.human);
           if (local) c.gainXp(this, 150);
         }
-        this.addFeed('Cayó una torre del carril ' + M.LANE_NAMES[t.lane] + ' (equipo ' + M.TEAM_NAMES[t.team] + ')', M.TEAM_COLORS[1 - t.team]);
+        this.addFeed('Cayó una torre del carril ' + M.LANE_NAMES[t.lane] + ' (equipo ' + M.TEAM_NAMES[t.team] + ')', M.TEAM_COLORS[1 - t.team], null, { k: 'tower', team: t.team, lane: t.lane });
         this.particles(t.x, t.y, '#aaa', 40, 600);
         this.shake = Math.max(this.shake, 10);
       } else if (t.type === 'nexus') {
@@ -16501,6 +16685,28 @@ MOBA.registerChampion({
         this.shake = 20;
         if (this.onGameOver) this.onGameOver(this.winner);
       }
+    }
+
+    /** Resumen de los últimos 15 s de daño recibido: por fuente y por habilidad. */
+    deathRecap(t) {
+      const since = this.time - 15, by = {};
+      let total = 0;
+      for (const e of t.recap || []) {
+        if (e.t < since) continue;
+        const key = e.s || ('x' + e.l);
+        const src = e.s ? this.units.find(function (u) { return u.id === e.s; }) || this.champions.find(function (u) { return u.id === e.s; }) : null;
+        const row = by[key] || (by[key] = { id: e.s, name: src ? (src.name || 'Unidad') : 'Fuente', type: src ? src.type : 'fountain', df: src && src.def ? src.def.id : '', team: src ? src.team : 1 - t.team, total: 0, parts: {} });
+        row.total += e.a; total += e.a;
+        const pk = e.l + '|' + e.k;
+        row.parts[pk] = (row.parts[pk] || 0) + e.a;
+      }
+      const rows = Object.keys(by).map(function (k) {
+        const r = by[k];
+        r.total = Math.round(r.total);
+        r.parts = Object.keys(r.parts).map(function (pk) { const sp = pk.split('|'); return { l: sp[0], k: sp[1], a: Math.round(r.parts[pk]) }; }).sort(function (a, b) { return b.a - a.a; }).slice(0, 5);
+        return r;
+      }).sort(function (a, b) { return b.total - a.total; }).slice(0, 6);
+      return { total: Math.round(total), rows: rows };
     }
 
     onLevelUp(c) {
@@ -16811,6 +17017,7 @@ MOBA.registerChampion({
       o.cd = u.cds.map(r2); o.rc = u.recalling ? r2(u.recalling.t) : 0;
       o.ad = r1(u.ad); o.ap = r1(u.ap); o.ar = r1(u.getArmor()); o.mr = r1(u.getMr()); o.as = r2(u.getAttackSpeed());
       o.ms = r1(u.getMoveSpeed()); o.cr = r2(u.critChance); o.hs = r1(u.haste); o.ls = r2(u.getLifesteal()); o.rg = u.attackRange;
+      o.bf = u.buffs.filter(function (b) { return b.remaining > 0 && b.remaining < 600; }).slice(0, 10).map(function (b) { return [b.type, r2(b.remaining), r2(b.duration || b.remaining), r2(b.amount || 0)]; });
       o.sh = r1(u.shieldAmount()); o.ca = r2(u.castAt == null ? -9 : u.castAt); o.cS = u.castSlot || 0; o.co = u.championsOnly ? 1 : 0;
     } else if (hidden) return null;
     o.x = r1(u.x); o.yy = r1(u.y); o.f = r2(u.facing);
@@ -16856,7 +17063,7 @@ MOBA.registerChampion({
     const fx = [], tx = [], fd = [];
     for (const f of g.fx) if (f.id > since.fx && (!f.to || f.to.indexOf(champId) >= 0)) fx.push(f);
     for (const t of g.texts) if (t.id > since.tx && (!t.to || t.to.indexOf(champId) >= 0)) tx.push({ x: r1(t.x), y: r1(t.y), text: t.text, color: t.color, big: t.big, life: t.life, max: t.max });
-    for (const f of g.feed) if (f.id > since.fd && (!f.to || f.to.indexOf(champId) >= 0)) fd.push({ text: f.text, color: f.color, time: f.time });
+    for (const f of g.feed) if (f.id > since.fd && (!f.to || f.to.indexOf(champId) >= 0)) fd.push({ text: f.text, color: f.color, time: f.time, ann: f.ann || null });
     return { fx: fx, tx: tx, fd: fd };
   };
 
@@ -16947,6 +17154,7 @@ MOBA.registerChampion({
         if (o.sg) u.buffs.push({ type: 'stealth', amount: 1, remaining: 1 });
         if (o.un) u.buffs.push({ type: 'undying', amount: 1, remaining: 1 });
         if (o.gr) u.buffs.push({ type: 'grow', amount: o.gr, remaining: 1 });
+        if (o.bf) u.buffs = o.bf.map(function (a) { return { type: a[0], remaining: a[1], duration: a[2], amount: a[3] }; });
         u.feared = !!o.fr;
         u.targetId = o.tg || 0;
         u.facing = o.f;
@@ -17045,7 +17253,7 @@ MOBA.registerChampion({
       if (msg.k === 'cmd') {
         const c = this.game.humans[cl.slot];
         const err = this.game.command(c, msg.c);
-        if (err && err !== 'no' && (msg.c.t === 'buy' || msg.c.t === 'sell')) this.transport.send(id, { k: 'msg', text: err });
+        if (err && err !== 'no' && (msg.c.t === 'buy' || msg.c.t === 'sell' || msg.c.t === 'buyPartial')) this.transport.send(id, { k: 'msg', text: err, shop: msg.c.t === 'buyPartial' });
       }
     }
     onLeave(id) {
@@ -18019,6 +18227,30 @@ MOBA.registerChampion({
         ctx.fillStyle = 'rgb(' + col + ')'; ctx.fillText(danger ? '⚠' : '!', s.x, s.y - 24);
         if (pg.who) { ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(pg.who, s.x, s.y + 22); }
         ctx.globalAlpha = 1;
+        // fuera de pantalla: flecha en el borde apuntando hacia la señal
+        const m = 46;
+        if (s.behind || s.x < m || s.y < m || s.x > this.W - m || s.y > this.H - m) {
+          const cx = this.W / 2, cy = this.H / 2;
+          let dx = s.x - cx, dy = s.y - cy;
+          if (s.behind) { dx = -dx; dy = -dy; }
+          const k = Math.min((cx - m) / Math.max(1, Math.abs(dx)), (cy - m) / Math.max(1, Math.abs(dy)));
+          const ex = cx + dx * k, ey = cy + dy * k, ang = Math.atan2(dy, dx);
+          ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang); ctx.globalAlpha = a;
+          ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.beginPath(); ctx.arc(0, 0, 20, 0, 6.283); ctx.fill();
+          ctx.fillStyle = 'rgb(' + col + ')';
+          ctx.beginPath(); ctx.moveTo(30, 0); ctx.lineTo(16, -9); ctx.lineTo(16, 9); ctx.closePath(); ctx.fill();
+          ctx.rotate(-ang); ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(danger ? '⚠' : '!', 0, 1);
+          ctx.restore();
+          ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
+        }
+      }
+      // unidad seleccionada (panel de objetivo): aro amarillo punteado
+      const sel = this.selectedUnit;
+      if (sel && !sel.dead) {
+        const s = this.worldToScreen(sel.x, sel.y, 0), rr = (sel.radius || 50) * this.cam.zoom * 1.25;
+        ctx.save(); ctx.setLineDash([6, 5]); ctx.strokeStyle = 'rgba(255,228,90,0.95)'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.ellipse(s.x, s.y, rr, rr * 0.6, 0, 0, 6.283); ctx.stroke(); ctx.restore();
       }
     }
     drawChampionBar(ctx, c, s) {
@@ -18306,6 +18538,7 @@ MOBA.registerChampion({
       this.shopTab = 'rec'; this.shopSel = null;
       this.lastLevel = session.world.player.level; this.lastGold = session.world.player.gold;
       this.build();
+      this.extra = new M.HudExtra(this);
       this.settingsFn = (k) => { if (k === 'keys' || k === '*') this.refreshKeys(); };
       M.Settings.on(this.settingsFn);
     }
@@ -18379,7 +18612,30 @@ MOBA.registerChampion({
       return html;
     }
 
-    showNotice(text) { this.notice = text; this.noticeUntil = this.game.time + 6; }
+    showNotice(text) {
+      this.notice = text; this.noticeUntil = this.game.time + 6;
+      if (!$('shop').classList.contains('hidden')) this.shopResult(text);
+    }
+    /** Resultado de una compra (toast en la tienda). Si no compró nada: sacudón rojo + "Oro insuficiente". */
+    shopResult(text, card) {
+      const ok = /^✔/.test(text || '');
+      this.shopMsg = text || '';
+      this.shopToast = { text: (text || '').replace(/^✔\s*/, ''), ok: ok, until: performance.now() + 4500 };
+      if (M.Audio) M.Audio.sfx(ok ? 'buy' : 'error');
+      this.renderShop(true);
+      if (!ok) {
+        const el = $('shop');
+        el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+        const c = card && el.querySelector('[data-sel="' + card + '"].scard'); if (c) c.classList.add('flash-red');
+      }
+    }
+    /** Doble clic o clic derecho en un objeto: lo compra; si no alcanza, compra los componentes que sí podés. */
+    smartBuy(id) {
+      this.shopSel = id;
+      const res = this.session.cmd({ t: 'buyPartial', item: id });
+      if (res == null) { if (!this.session.local) { this.shopMsg = 'Comprando…'; this.renderShop(true); } return; }   // en red: la respuesta llega como aviso
+      this.shopResult(res, id);
+    }
     showTooltip(el, html) {
       const t = $('tooltip');
       t.innerHTML = html; t.classList.remove('hidden');
@@ -18422,6 +18678,7 @@ MOBA.registerChampion({
       this.xpFill.style.width = (p.level >= 18 ? 100 : p.xp / p.xpToNext() * 100) + '%';
 
       this.renderer.drawMinimap(this.mctx, 220);
+      this.extra.update(dt);
       // sonidos de la interfaz: subir de nivel, comprar/vender
       if (p.level > this.lastLevel && M.Audio) M.Audio.sfx('levelup');
       this.lastLevel = p.level;
@@ -18438,6 +18695,7 @@ MOBA.registerChampion({
       $('gold').textContent = Math.floor(p.gold);
       const fps = $('fps');
       if (fps) { const on = !!M.Settings.get('showFps'); fps.style.display = on ? '' : 'none'; if (on) fps.textContent = Math.round(this.renderer.fps) + ' FPS'; }
+      this.extra.slowUpdate();
       $('stats').innerHTML =
         '<span>Daño <b>' + Math.round(p.ad) + '</b></span><span>Poder <b>' + Math.round(p.ap) + '</b></span>' +
         '<span>Armadura <b>' + Math.round(p.getArmor()) + '</b></span><span>Res. mág. <b>' + Math.round(p.getMr()) + '</b></span>' +
@@ -18458,7 +18716,7 @@ MOBA.registerChampion({
         $('items').innerHTML = items;
       }
       // feed
-      const feed = g.feed.filter(function (f) { return g.time - f.time < 9; }).slice(-6);
+      const feed = g.feed.filter(function (f) { return g.time - f.time < 9 && !(f.ann && f.ann.k === 'kill'); }).slice(-5);
       $('killfeed').innerHTML = feed.map(function (f) { return '<div class="feed-item" style="border-color:' + f.color + '">' + f.text + '</div>'; }).join('');
       // muerte
       const d = $('death-overlay');
@@ -18477,12 +18735,21 @@ MOBA.registerChampion({
 
     renderScoreboard() {
       const g = this.game, p = this.p;
-      let html = '<table><tr><th>Campeón</th><th>Rol</th><th>Nivel</th><th>A/M/As</th><th>Súbditos</th><th>Oro</th><th>Objetos</th></tr>';
-      for (const c of g.champions) {
-        html += '<tr class="t' + c.team + (c === p ? ' me' : '') + '"><td>' + c.name + (c.human ? ' <span class="pn">(' + (c.playerName || 'jugador') + ')</span>' : ' <span class="pn">(bot)</span>') + (c.dead ? ' ☠' : '') + '</td><td>' + c.def.role + '</td><td>' + c.level +
-          '</td><td>' + c.kills + '/' + c.deaths + '/' + c.assists + '</td><td>' + c.cs + '</td><td>' + Math.floor(c.gold) + '</td><td>' + c.items.length + '</td></tr>';
+      let html = '<div class="sb-head"><span style="color:' + M.TEAM_COLORS[0] + '">Azul ' + g.score[0] + '</span> — <span style="color:' + M.TEAM_COLORS[1] + '">' + g.score[1] + ' Rojo</span> · ' + U.fmtTime(g.time) + '</div>';
+      html += '<table><tr><th></th><th>Campeón</th><th>Nv</th><th>A/M/As</th><th>CS</th><th>Oro</th><th>Objetos</th></tr>';
+      for (const team of [0, 1]) {
+        const list = g.champions.filter(function (c) { return c.team === team; });
+        const kills = list.reduce(function (a, c) { return a + c.kills; }, 0), gold = list.reduce(function (a, c) { return a + c.items.reduce(function (s, id) { return s + M.itemById[id].cost; }, 0); }, 0);
+        html += '<tr class="sb-team t' + team + '"><td colspan="7">Equipo ' + M.TEAM_NAMES[team] + ' · ' + kills + ' asesinatos · ' + gold + ' de oro en objetos</td></tr>';
+        for (const c of list) {
+          let items = '';
+          for (let i = 0; i < M.MAX_ITEMS; i++) items += '<span class="sb-it">' + (c.items[i] ? '<img src="' + M.Portraits.itemIcon(c.items[i], 32) + '" title="' + U.escapeHtml(M.itemName(c.items[i])) + '">' : '') + '</span>';
+          html += '<tr class="t' + c.team + (c === p ? ' me' : '') + (c.dead ? ' dead' : '') + '"><td><img class="sb-pic" src="' + M.unitIcon(c) + '">' + (c.dead ? '<span class="sb-rt">' + Math.ceil(c.respawnTimer || 0) + '</span>' : '') + '</td><td>' + c.name +
+            (c.human ? ' <span class="pn">(' + U.escapeHtml(c.playerName || 'jugador') + ')</span>' : ' <span class="pn">(bot)</span>') + '<div class="pn">' + c.def.role + '</div></td><td>' + c.level +
+            '</td><td><b>' + c.kills + '/' + c.deaths + '/' + c.assists + '</b></td><td>' + c.cs + '</td><td>' + (c.team === p.team ? Math.floor(c.gold) : '—') + '</td><td class="sb-items">' + items + '</td></tr>';
+        }
       }
-      html += '</table><div style="text-align:center;margin-top:8px;color:#9fb0d0;font-size:12px">Azul ' + g.score[0] + ' — ' + g.score[1] + ' Rojo · ' + U.fmtTime(g.time) + '</div>';
+      html += '</table>';
       $('scoreboard').innerHTML = html;
     }
 
@@ -18517,7 +18784,7 @@ MOBA.registerChampion({
       const g = this.game, p = this.p, el = $('shop');
       const can = g.canShop(p);
       const undoN = p.undo ? p.undo.length : (p.undoCount || 0);
-      const key = Math.floor(p.gold) + '|' + p.items.join(',') + '|' + can + '|' + (this.shopMsg || '') + '|' + this.shopTab + '|' + this.shopSel + '|' + undoN;
+      const key = Math.floor(p.gold) + '|' + p.items.join(',') + '|' + can + '|' + (this.shopMsg || '') + (this.shopToast && this.shopToast.until > performance.now() ? 'T' : '') + '|' + this.shopTab + '|' + this.shopSel + '|' + undoN;
       if (!full && key === this.shopKey) return;
       this.shopKey = key;
       const role = p.def.role, rec = M.RECOMMENDED[role] || [];
@@ -18534,14 +18801,16 @@ MOBA.registerChampion({
       const card = (it) => {
         const plan = M.purchasePlan(p.items, it.id), err = M.canBuy(p, it.id, can);
         const disc = plan.cost < it.cost;
-        return '<div class="scard' + (it.id === this.shopSel ? ' sel' : '') + (err ? ' cant' : '') + (rec.indexOf(it.id) >= 0 ? ' rec' : '') + '" data-sel="' + it.id + '" title="Clic: ver · Clic derecho: comprar">' +
+        const short = err === 'No te alcanza el oro' ? Math.ceil(plan.cost - p.gold) : 0;
+        return '<div class="scard' + (it.id === this.shopSel ? ' sel' : '') + (err ? ' cant' : '') + (rec.indexOf(it.id) >= 0 ? ' rec' : '') + '" data-sel="' + it.id + '" title="Clic: ver · Doble clic o clic derecho: comprar (si no te alcanza, compra las partes que sí)">' +
           '<img src="' + M.Portraits.itemIcon(it.id, 64) + '"><div class="sname">' + M.itemName(it.id) + '</div>' +
-          '<div class="scost' + (disc ? ' disc' : '') + '">' + (disc ? '<s>' + it.cost + '</s> ' : '') + plan.cost + '</div></div>';
+          '<div class="scost' + (disc ? ' disc' : '') + '">' + (disc ? '<s>' + it.cost + '</s> ' : '') + plan.cost + '</div>' + (short && can ? '<div class="sshort">Te faltan ' + short + '</div>' : '') + '</div>';
       };
       let html = '<div class="shop-head"><h2>Tienda</h2><div class="shop-gold">🪙 ' + Math.floor(p.gold) + ' oro · ' + p.items.length + '/' + M.MAX_ITEMS + ' objetos</div>' +
         '<button data-undo="1"' + (undoN && can ? '' : ' disabled') + ' title="Deshace tu última compra o venta (mientras sigas en la base)">↶ Deshacer</button>' +
         '<button class="close-btn" data-close="1">Cerrar (' + M.Settings.label('shop') + ')</button></div>' +
-        '<div class="shop-note">' + U.escapeHtml(this.shopMsg || (can ? 'Clic derecho sobre un objeto para comprarlo. Los componentes que ya tenés se descuentan del precio.' : 'Tenés que estar en la base (o muerto) para comprar.')) + '</div>' +
+        '<div class="shop-note">' + U.escapeHtml(can ? 'Doble clic o clic derecho para comprar. Si no te alcanza, se compran las partes de la receta que sí podés pagar (de la más barata a la más cara).' : 'Tenés que estar en la base (o muerto) para comprar.') + '</div>' +
+        (this.shopToast && this.shopToast.until > performance.now() ? '<div class="shop-toast ' + (this.shopToast.ok ? 'ok' : 'bad') + '">' + U.escapeHtml(this.shopToast.ok ? this.shopToast.text : (/Oro insuficiente/.test(this.shopToast.text) ? this.shopToast.text : this.shopToast.text)) + '</div>' : '') +
         '<div class="shop-tabs">' + SHOP_TABS.map((t) => '<button data-tab="' + t[0] + '" class="' + (t[0] === this.shopTab ? 'active' : '') + '">' + t[1] + (t[0] === 'rec' ? ' (' + role + ')' : '') + '</button>').join('') + '</div>' +
         '<div class="shop-body"><div class="shop-list">';
       if (this.shopTab === 'rec') {
@@ -18562,7 +18831,8 @@ MOBA.registerChampion({
         (it.into.length ? '<div class="shop-sec">Sirve para</div><div class="into">' + it.into.map(function (x) { return '<div class="tcard" data-sel="' + x + '" title="' + U.escapeHtml(M.itemName(x)) + '"><img src="' + M.Portraits.itemIcon(x, 48) + '"><span>' + M.itemById[x].cost + '</span></div>'; }).join('') + '</div>' : '') +
         '<div class="dprice">Costo total ' + it.cost + (plan.cost < it.cost ? ' · <b>a vos te sale ' + plan.cost + '</b> (usa ' + plan.consume.length + ' componente' + (plan.consume.length === 1 ? '' : 's') + ' tuyo' + (plan.consume.length === 1 ? '' : 's') + ')' : '') + '</div>' +
         '<button class="buy-btn" data-buy="' + it.id + '"' + (err ? ' disabled title="' + U.escapeHtml(err) + '"' : '') + '>Comprar (' + plan.cost + ')</button>' +
-        (err && can ? '<div class="derr">' + U.escapeHtml(err) + '</div>' : '') + '</div></div>';
+        (err && can ? '<div class="derr">' + U.escapeHtml(err === 'No te alcanza el oro' ? 'Te faltan ' + Math.ceil(plan.cost - p.gold) + ' de oro' : err) + '</div>' : '') +
+        (err === 'No te alcanza el oro' && can ? '<button class="buy-btn partial" data-partial="' + it.id + '">Comprar las partes que me alcanzan</button>' : '') + '</div></div>';
       // inventario
       html += '<div class="shop-inv"><span>Inventario (vender al ' + Math.round(M.SELL_RATIO * 100) + '%):</span>';
       for (let i = 0; i < M.MAX_ITEMS; i++) {
@@ -18576,22 +18846,32 @@ MOBA.registerChampion({
       const act = (b) => {
         if (b.dataset.close) { this.toggleShop(false); return; }
         if (b.dataset.tab) { this.shopTab = b.dataset.tab; }
-        if (b.dataset.buy) this.shopMsg = this.session.cmd({ t: 'buy', item: b.dataset.buy }) || '';
-        if (b.dataset.sell) this.shopMsg = this.session.cmd({ t: 'sell', i: +b.dataset.sell }) || '';
-        if (b.dataset.undo) this.shopMsg = this.session.cmd({ t: 'undo' }) || '';
-        if (this.shopMsg && M.Audio) M.Audio.sfx('error');
+        if (b.dataset.partial) { this.smartBuy(b.dataset.partial); return; }
+        let err = null;
+        if (b.dataset.buy) err = this.session.cmd({ t: 'buy', item: b.dataset.buy });
+        if (b.dataset.sell) err = this.session.cmd({ t: 'sell', i: +b.dataset.sell });
+        if (b.dataset.undo) err = this.session.cmd({ t: 'undo' });
+        if (err && err !== 'no') { this.shopResult(err === 'No te alcanza el oro' ? 'Oro insuficiente' : err, b.dataset.buy); return; }
         this.renderShop(true);
       };
       el.onclick = (e) => {
         const b = e.target.closest('button');
         if (b) { act(b); return; }
         const sel = e.target.closest('[data-sel]');
-        if (sel) { this.shopSel = sel.dataset.sel; this.shopMsg = ''; if (M.Audio) M.Audio.sfx('click'); this.renderShop(true); }
+        if (sel) this.lastSelClick = performance.now();
+        if (sel && sel.dataset.sel !== this.shopSel) { this.shopSel = sel.dataset.sel; this.shopMsg = ''; if (M.Audio) M.Audio.sfx('click'); this.renderShop(true); }
       };
       el.oncontextmenu = (e) => {
         e.preventDefault();
         const sel = e.target.closest('[data-sel]');
-        if (sel) { this.shopSel = sel.dataset.sel; this.shopMsg = this.session.cmd({ t: 'buy', item: sel.dataset.sel }) || ''; if (this.shopMsg && M.Audio) M.Audio.sfx('error'); this.renderShop(true); }
+        if (sel) this.smartBuy(sel.dataset.sel);
+      };
+      el.ondblclick = (e) => {
+        const sel = e.target.closest('[data-sel]');
+        // el primer clic re-dibuja la tienda, así que el objetivo del doble clic puede ser el contenedor: usamos la selección
+        if (e.target.closest('.shop-inv') || e.target.closest('button')) return;
+        const id = sel ? sel.dataset.sel : (performance.now() - (this.lastSelClick || 0) < 600 ? this.shopSel : null);
+        if (id && M.itemById[id]) this.smartBuy(id);
       };
     }
 
@@ -18613,6 +18893,255 @@ MOBA.registerChampion({
   }
 
   M.HUD = HUD;
+})(window.MOBA);
+
+</script>
+  <script>/* js/hud_extra.js */
+/* HUD estilo LoL, parte 2: anuncios grandes (asesinatos, rachas, torres, as), feed con retratos,
+ * panel del objetivo (arriba a la izquierda), marcos de aliados, K/D/A arriba a la derecha,
+ * efectos activos sobre tus habilidades, resumen de muerte, viñeta de poca vida y destello al subir de nivel. */
+(function (M) {
+  'use strict';
+  const U = M.util;
+  const $ = function (id) { return document.getElementById(id); };
+  const esc = function (s) { return U.escapeHtml(String(s == null ? '' : s)); };
+
+  // ---------------------------------------------------------------- textos de los anuncios
+  const MULTI = ['', '', '¡Asesinato doble!', '¡Asesinato triple!', '¡Cuadrakill!', '¡Pentakill!'];
+  const SPREE = { 3: 'está en racha', 4: 'está descontrolado', 5: 'es imparable', 6: 'está dominando', 7: 'es divino' };
+  function spreeText(n) { return n >= 8 ? 'es legendario' : SPREE[n] || ''; }
+  const DMG_COL = { physical: '#ff9a4a', magic: '#b78cff', true: '#ffffff' };
+
+  /** Arma el anuncio desde la perspectiva del jugador `me`. Devuelve { title, sub, tone: 'good'|'bad'|'neutral', sfx, killer, victim } o null. */
+  M.announceText = function (ann, me, byId) {
+    if (!ann || !me) return null;
+    const find = byId || function () { return null; };
+    if (ann.k === 'kill') {
+      const k = ann.killer ? find(ann.killer) : null, v = find(ann.victim);
+      const kName = k ? k.name : (ann.by || 'el entorno'), vName = v ? v.name : 'un campeón';
+      const mine = ann.killer === me.id, died = ann.victim === me.id, allyKill = ann.team === me.team;
+      const base = mine ? '¡Has asesinado a un enemigo!' : died ? '¡Has sido asesinado!' : allyKill ? '¡Un enemigo ha sido asesinado!' : '¡Un aliado ha sido asesinado!';
+      let title = base, special = true, sfx = mine ? 'ann_kill' : died ? 'ann_death' : allyKill ? 'ann_good' : 'ann_bad';
+      if (ann.multi >= 2) { title = MULTI[Math.min(5, ann.multi)]; sfx = 'ann_multi'; }
+      else if (ann.first) { title = '¡Primera sangre!'; sfx = 'ann_first'; }
+      else if (ann.shutdown) title = '¡Racha cortada!';
+      else if (ann.spree >= 3 && k) title = '¡' + kName + ' ' + spreeText(ann.spree) + '!';
+      else special = false;
+      let line = k ? kName + ' eliminó a ' + vName : vName + ' fue ejecutado por ' + kName;
+      if (ann.shutdown && !(ann.multi >= 2)) line += ' (cortó una racha de ' + ann.shutdown + ')';
+      return { title: title, sub: (special ? base + ' · ' : '') + line, tone: allyKill ? 'good' : 'bad', sfx: sfx, killer: k, victim: v, team: ann.team };
+    }
+    if (ann.k === 'ace') {
+      const good = ann.team !== me.team;
+      return { title: '¡As!', sub: good ? 'Cayó todo el equipo enemigo' : 'Cayó todo tu equipo', tone: good ? 'good' : 'bad', sfx: 'ann_ace', team: 1 - ann.team };
+    }
+    if (ann.k === 'tower') {
+      const own = ann.team === me.team;
+      return { title: own ? '¡Destruyeron una de tus torres!' : '¡Tu equipo destruyó una torre!', sub: 'Carril ' + (M.LANE_NAMES[ann.lane] || ann.lane || ''), tone: own ? 'bad' : 'good', sfx: 'ann_tower', team: 1 - ann.team, tower: true };
+    }
+    if (ann.k === 'nexus') {
+      if (ann.team !== me.team) return null;   // como en LoL: solo te avisan del tuyo
+      return { title: '¡Tu nexo está bajo ataque!', sub: 'Volvé a defender', tone: 'bad', sfx: 'ann_alert', team: 1 - ann.team };
+    }
+    return null;
+  };
+
+  // ---------------------------------------------------------------- íconos
+  const unitIconCache = {};
+  /** Retrato para cualquier unidad: campeón = su retrato; el resto, un ícono simple con el color del equipo. */
+  function unitIcon(u) {
+    if (!u) return '';
+    if (u.type === 'champion' && u.def) return M.Portraits.get(u.def, true) || '';
+    const col = u.team === 2 ? '#c9a24a' : (M.TEAM_COLORS[u.team] || '#888');
+    const key = u.type + (u.kind || '') + col;
+    if (unitIconCache[key]) return unitIconCache[key];
+    let shape;
+    if (u.type === 'tower') shape = '<rect x="22" y="20" width="20" height="34" fill="' + col + '"/><rect x="18" y="12" width="28" height="10" fill="#ddd"/><circle cx="32" cy="9" r="5" fill="' + col + '"/>';
+    else if (u.type === 'nexus') shape = '<path d="M32 6 L54 32 L32 58 L10 32Z" fill="' + col + '" stroke="#fff" stroke-width="2"/>';
+    else if (u.type === 'monster') shape = u.kind === 'golem' ? '<rect x="14" y="16" width="36" height="34" rx="8" fill="#8a8f99"/><circle cx="26" cy="30" r="4" fill="#ffd54a"/><circle cx="38" cy="30" r="4" fill="#ffd54a"/>'
+      : '<path d="M12 50 L20 14 L30 30 L34 30 L44 14 L52 50Z" fill="#7a6aa8"/><circle cx="26" cy="38" r="3" fill="#9ff"/><circle cx="38" cy="38" r="3" fill="#9ff"/>';
+    else shape = '<circle cx="32" cy="24" r="11" fill="' + col + '"/><rect x="20" y="34" width="24" height="20" rx="6" fill="' + col + '"/>' + (u.kind === 'ranged' ? '<circle cx="48" cy="30" r="5" fill="#9cf"/>' : u.kind === 'cannon' ? '<rect x="40" y="36" width="16" height="7" fill="#555"/>' : '<rect x="44" y="18" width="4" height="26" fill="#ccc"/>');
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#101a2e"/>' + shape + '</svg>';
+    return (unitIconCache[key] = 'data:image/svg+xml;base64,' + btoa(svg));
+  }
+  M.unitIcon = unitIcon;
+  function unitName(u) {
+    if (!u) return '';
+    if (u.type === 'champion') return u.name + (u.playerName ? ' (' + u.playerName + ')' : '');
+    if (u.type === 'minion') return 'Súbdito ' + ({ melee: 'cuerpo a cuerpo', ranged: 'a distancia', cannon: 'de asedio' }[u.kind] || '');
+    if (u.type === 'tower') return 'Torre' + (u.lane ? ' (' + (M.LANE_NAMES[u.lane] || u.lane) + ')' : '');
+    return u.name || u.type;
+  }
+  const BUFFS = {
+    stun: ['Aturdido', '✶', 0], slow: ['Ralentizado', '↓', 0], fear: ['Aterrado', '!', 0], dot: ['Quemadura', '♨', 0], armorShred: ['Armadura rota', '⛉', 0],
+    shield: ['Escudo', '⛨', 1], attackSpeed: ['Velocidad de ataque', '⚡', 1], moveSpeed: ['Velocidad', '»', 1], armor: ['Armadura', '◆', 1], mr: ['Resistencia mágica', '◇', 1],
+    lifesteal: ['Robo de vida', '♥', 1], stealth: ['Invisible', '◌', 1], grow: ['Gigante', '▲', 1], undying: ['Inmortal', '✚', 1], ad: ['Daño', '⚔', 1], ap: ['Poder', '✦', 1]
+  };
+  /** Íconos de efectos activos con tiempo restante. */
+  function buffsHtml(u, big) {
+    if (!u || !u.buffs || !u.buffs.length) return '';
+    return u.buffs.filter(function (b) { return b.remaining > 0 && b.remaining < 600; }).slice(0, 10).map(function (b) {
+      const info = BUFFS[b.type] || [b.type, '•', (b.amount || 0) >= 0 ? 1 : 0];
+      const good = info[2] && !(b.amount < 0);
+      const pct = b.duration ? U.clamp(b.remaining / b.duration, 0, 1) : 1;
+      const t = b.remaining >= 1 ? Math.ceil(b.remaining) : b.remaining.toFixed(1);
+      return '<div class="buff ' + (good ? 'good' : 'bad') + (big ? ' big' : '') + '" title="' + info[0] + (b.amount && b.type !== 'stun' ? ' (' + (Math.abs(b.amount) < 1 ? Math.round(b.amount * 100) + '%' : Math.round(b.amount)) + ')' : '') + '">' +
+        '<span class="bi">' + info[1] + '</span><span class="bt">' + t + '</span><i style="height:' + Math.round((1 - pct) * 100) + '%"></i></div>';
+    }).join('');
+  }
+  M.buffsHtml = buffsHtml;
+
+  // ---------------------------------------------------------------- clase principal
+  class HudExtra {
+    constructor(hud) {
+      this.hud = hud; this.game = hud.game; this.p = hud.p;
+      this.queue = []; this.cur = null; this.curT = 0;
+      this.kills = [];         // feed de asesinatos con retratos
+      this.selected = null;
+      this.recapShown = false; this.lastLevel = this.p.level;
+      this.wasDead = false;
+      ['announce', 'target-panel', 'ally-frames', 'kda-box', 'my-buffs', 'death-recap', 'vignette', 'lvl-flash'].forEach(function (id) { const el = $(id); if (el) { el.innerHTML = ''; } });
+      $('announce').className = 'hidden'; $('death-recap').className = 'hidden'; $('target-panel').className = 'hidden';
+      for (const f of this.game.feed) f.seenAnn = true;    // lo viejo no se anuncia
+    }
+    byId(id) {
+      const g = this.game;
+      return g.champions.find(function (c) { return c.id === id; }) || (g.byId ? g.byId[id] : null) || g.units.find(function (u) { return u.id === id; }) || null;
+    }
+    // ---------- anuncios ----------
+    pullFeed() {
+      const g = this.game, me = this.p;
+      for (const f of g.feed) {
+        if (f.seenAnn) continue;
+        f.seenAnn = true;
+        if (!f.ann) continue;
+        const a = M.announceText(f.ann, me, this.byId.bind(this));
+        if (f.ann.k === 'kill') {
+          this.kills.push({ t: g.time, ann: f.ann, k: a && a.killer, v: a && a.victim, team: f.ann.team, by: f.ann.by, n: f.ann.assists ? f.ann.assists.length : 0 });
+          if (this.kills.length > 6) this.kills.shift();
+          if (f.ann.victim === me.id) this.lastRecap = f.ann.recap;
+        }
+        if (!a) continue;
+        a.prio = f.ann.k === 'kill' && (f.ann.multi >= 2 || f.ann.first) ? 3 : f.ann.k === 'ace' ? 3 : f.ann.killer === me.id || f.ann.victim === me.id ? 2 : 1;
+        this.queue.push(a);
+        // que no se acumulen: si hay muchos, se descartan los menos importantes
+        while (this.queue.length > 4) {
+          let low = 0; for (let i = 1; i < this.queue.length; i++) if (this.queue[i].prio < this.queue[low].prio) low = i;
+          this.queue.splice(low, 1);
+        }
+      }
+    }
+    showBanner(a) {
+      const el = $('announce');
+      const col = M.TEAM_COLORS[a.team] || '#ffd54a';
+      const pic = function (u, cls) { return u ? '<div class="ann-pic ' + cls + '" style="border-color:' + (M.TEAM_COLORS[u.team] || '#888') + '"><img src="' + unitIcon(u) + '"></div>' : ''; };
+      el.innerHTML = '<div class="ann-row">' + pic(a.killer, 'k') + '<div class="ann-text"><div class="ann-title">' + esc(a.title) + '</div><div class="ann-sub">' + esc(a.sub) + '</div></div>' + pic(a.victim, 'v') + '</div>';
+      el.className = 'ann ' + a.tone; el.style.setProperty('--ann-col', col);
+      void el.offsetWidth; el.classList.add('show');
+      if (M.Audio) M.Audio.sfx(a.sfx);
+    }
+    // ---------- cada cuadro ----------
+    update(dt) {
+      const g = this.game, p = this.p;
+      this.pullFeed();
+      if (this.cur) { this.curT -= dt; if (this.curT <= 0) { this.cur = null; $('announce').className = 'hidden'; this.gap = 0.25; } }
+      if (this.gap > 0) this.gap -= dt;
+      else if (!this.cur && this.queue.length) {
+        let best = 0; for (let i = 1; i < this.queue.length; i++) if (this.queue[i].prio > this.queue[best].prio) best = i;
+        this.cur = this.queue.splice(best, 1)[0]; this.curT = 2.6; this.showBanner(this.cur);
+      }
+      // viñeta de poca vida
+      const frac = p.dead ? 0 : p.hp / p.maxHp;
+      const v = $('vignette');
+      const op = frac < 0.35 ? (0.35 - frac) / 0.35 * (0.75 + 0.25 * Math.sin(g.time * 6)) : 0;
+      if (Math.abs((this.vigOp || 0) - op) > 0.02) { v.style.opacity = op.toFixed(2); this.vigOp = op; }
+      // destello al subir de nivel
+      if (p.level > this.lastLevel) { const f = $('lvl-flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
+      this.lastLevel = p.level;
+    }
+    // ---------- cada 0,2 s ----------
+    slowUpdate() {
+      const g = this.game, p = this.p;
+      // K/D/A arriba a la derecha
+      $('kda-box').innerHTML = '<span title="Asesinatos de tu equipo"><b style="color:' + M.TEAM_COLORS[p.team] + '">' + g.score[p.team] + '</b> vs <b style="color:' + M.TEAM_COLORS[1 - p.team] + '">' + g.score[1 - p.team] + '</b></span>' +
+        '<span title="Asesinatos / Muertes / Asistencias">⚔ <b>' + p.kills + '/' + p.deaths + '/' + p.assists + '</b></span>' +
+        '<span title="Súbditos y monstruos">CS <b>' + p.cs + '</b></span><span title="Tiempo de partida">⏱ <b>' + U.fmtTime(g.time) + '</b></span>';
+      // feed de asesinatos con retratos
+      const kills = this.kills.filter(function (k) { return g.time - k.t < 12; });
+      const pic = function (u, team) { return u ? '<img src="' + unitIcon(u) + '" style="border-color:' + (M.TEAM_COLORS[u.team] || '#888') + '">' : '<span class="kf-env">' + esc(team) + '</span>'; };
+      const kf = kills.map(function (k) {
+        return '<div class="kf-item" style="border-color:' + M.TEAM_COLORS[k.team] + '">' + pic(k.k, k.by || '?') + (k.n ? '<span class="kf-ast">+' + k.n + '</span>' : '') +
+          '<span class="kf-sw">⚔</span>' + pic(k.v, '') + '</div>';
+      }).join('');
+      if (kf !== this.kfHtml) { $('kill-portraits').innerHTML = kf; this.kfHtml = kf; }
+      // marcos de aliados
+      const allies = g.champions.filter(function (c) { return c.team === p.team && c !== p; });
+      $('ally-frames').innerHTML = allies.map(function (c) {
+        const hp = U.clamp(c.hp / c.maxHp, 0, 1), mn = c.maxMana ? U.clamp(c.mana / c.maxMana, 0, 1) : 0;
+        const rReady = c.ranks && c.ranks[3] > 0 && c.cds && c.cds[3] <= 0;
+        return '<div class="ally' + (c.dead ? ' dead' : '') + '" title="' + esc(c.name) + '"><div class="ap" style="border-color:' + M.TEAM_COLORS[c.team] + '"><img src="' + unitIcon(c) + '"><span class="alv">' + c.level + '</span>' +
+          (c.dead ? '<span class="ard">' + Math.ceil(c.respawnTimer || 0) + '</span>' : '') + (rReady ? '<span class="ar" title="Definitiva lista">R</span>' : '') + '</div>' +
+          '<div class="abars"><div class="ahp" style="width:' + (hp * 100).toFixed(1) + '%;background:' + (M.BAR_COLORS ? M.BAR_COLORS.ally : '#38a3ff') + '"></div><div class="amn" style="width:' + (mn * 100).toFixed(1) + '%"></div></div></div>';
+      }).join('');
+      // efectos activos sobre tus habilidades
+      const mb = buffsHtml(p, false);
+      if (mb !== this.mbHtml) { $('my-buffs').innerHTML = mb; this.mbHtml = mb; }
+      this.renderTarget();
+      this.renderRecap();
+    }
+    // ---------- panel del objetivo ----------
+    targetUnit() {
+      const p = this.p, g = this.game;
+      let u = this.selected;
+      if (u && (u.dead && u.type !== 'champion' || u.hiddenLocal || (g.units.indexOf(u) < 0 && g.champions.indexOf(u) < 0))) { u = this.selected = null; }
+      if (!u) u = p.target || (p.targetId ? this.byId(p.targetId) : null);
+      if (!u && this.hud.renderer.hoverTarget) u = this.hud.renderer.hoverTarget;
+      return u && !u.dead ? u : (u && u.type === 'champion' ? u : null);
+    }
+    renderTarget() {
+      const el = $('target-panel'), u = this.targetUnit();
+      this.hud.renderer.selectedUnit = this.selected;
+      if (!u || u === this.p && !this.selected) { if (!el.classList.contains('hidden')) el.className = 'hidden'; return; }
+      el.className = '';
+      const hp = U.clamp(u.hp / u.maxHp, 0, 1), mn = u.maxMana ? U.clamp(u.mana / u.maxMana, 0, 1) : 0;
+      const ally = u.team === this.p.team;
+      const num = function (f, d) { try { const v = f(); return isFinite(v) ? v : null; } catch (e) { return null; } };
+      const stat = function (label, v, fmt) { return '<span title="' + label + '"><em>' + label + '</em> <b>' + (v == null ? '—' : fmt ? fmt(v) : Math.round(v)) + '</b></span>'; };
+      const ad = num(function () { return u.ad; }), ap = num(function () { return u.ap; });
+      const stats = stat('Daño', ad) + stat('Poder', ap) + stat('Armadura', num(function () { return u.getArmor(); })) + stat('Res. mág.', num(function () { return u.getMr(); })) +
+        stat('Vel. at.', num(function () { return u.getAttackSpeed(); }), function (v) { return v.toFixed(2); }) + stat('Velocidad', num(function () { return u.getMoveSpeed(); })) +
+        stat('Crítico', num(function () { return u.critChance; }), function (v) { return Math.round(v * 100) + '%'; }) + stat('Alcance', num(function () { return u.attackRange; }));
+      let items = '';
+      if (u.type === 'champion' && u.items) for (let i = 0; i < M.MAX_ITEMS; i++) items += '<div class="tslot">' + (u.items[i] ? '<img src="' + M.Portraits.itemIcon(u.items[i], 32) + '" title="' + esc(M.itemName(u.items[i])) + '">' : '') + '</div>';
+      const html = '<div class="tp-head"><div class="tp-pic" style="border-color:' + (u.team === 2 ? '#c9a24a' : M.TEAM_COLORS[u.team]) + '"><img src="' + unitIcon(u) + '">' + (u.level ? '<span class="tp-lv">' + u.level + '</span>' : '') + '</div>' +
+        '<div class="tp-main"><div class="tp-name">' + esc(unitName(u)) + (u.dead ? ' <span style="color:#ff8a8a">(muerto)</span>' : '') + '</div>' +
+        '<div class="tp-bar hp"><i style="width:' + (hp * 100).toFixed(1) + '%;background:' + (ally ? (M.BAR_COLORS ? M.BAR_COLORS.ally : '#38a3ff') : (M.BAR_COLORS ? M.BAR_COLORS.enemy : '#ff4a4a')) + '"></i><span>' + Math.ceil(u.hp) + ' / ' + Math.round(u.maxHp) + '</span></div>' +
+        (u.maxMana ? '<div class="tp-bar mn"><i style="width:' + (mn * 100).toFixed(1) + '%"></i><span>' + Math.floor(u.mana) + ' / ' + Math.round(u.maxMana) + '</span></div>' : '') + '</div></div>' +
+        '<div class="tp-stats">' + stats + '</div>' + (items ? '<div class="tp-items">' + items + '</div>' : '') + '<div class="tp-buffs">' + buffsHtml(u, false) + '</div>';
+      if (html !== this.tpHtml) { el.innerHTML = html; this.tpHtml = html; }
+      el.dataset.unit = u.id;
+    }
+    select(u) { this.selected = u || null; this.tpHtml = ''; this.renderTarget(); }
+    // ---------- resumen de muerte ----------
+    renderRecap() {
+      const p = this.p, el = $('death-recap'), g = this.game;
+      if (!p.dead || g.over || !this.lastRecap) { if (!el.classList.contains('hidden')) el.className = 'hidden'; this.recapShown = false; return; }
+      if (this.recapShown) return;
+      this.recapShown = true;
+      const r = this.lastRecap, self = this;
+      const rows = r.rows.map(function (row) {
+        const u = row.id ? self.byId(row.id) : null;
+        const pct = r.total ? row.total / r.total * 100 : 0;
+        const parts = row.parts.map(function (pt) { return '<div class="rc-part"><span>' + esc(pt.l) + '</span><b style="color:' + (DMG_COL[pt.k] || '#fff') + '">' + pt.a + '</b></div>'; }).join('');
+        return '<div class="rc-row"><img src="' + (u ? unitIcon(u) : unitIcon({ type: 'tower', team: row.team })) + '"><div class="rc-body"><div class="rc-name">' + esc(row.name) +
+          '<span>' + row.total + ' (' + Math.round(pct) + '%)</span></div><div class="rc-bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>' + parts + '</div></div>';
+      }).join('');
+      el.innerHTML = '<div class="rc-title">Resumen de muerte</div><div class="rc-total">Daño recibido en los últimos 15 s: <b>' + r.total + '</b> ' +
+        '<span class="rc-key"><b style="color:' + DMG_COL.physical + '">físico</b> · <b style="color:' + DMG_COL.magic + '">mágico</b> · <b>verdadero</b></span></div>' + (rows || '<div>Sin datos</div>');
+      el.className = '';
+    }
+  }
+  M.HudExtra = HudExtra;
 })(window.MOBA);
 
 </script>
@@ -19227,6 +19756,21 @@ MOBA.registerChampion({
     return world.pickTarget(w.x, w.y, targetRadius(), p.team, { championsOnly: shiftHeld });
   }
 
+  /** Cualquier unidad visible bajo el mouse (aliada, enemiga, neutral, estructura) para el panel de objetivo. */
+  function pickAny(w) {
+    if (!world || !renderer) return null;
+    let best = null, bd = Infinity;
+    const r = targetRadius();
+    for (const u of world.units.concat(world.champions)) {
+      if (u.dead || u.hiddenLocal) continue;
+      const v = renderer.views.get(u.id);
+      if (v && !v.root.visible) continue;
+      const d = Math.hypot(u.x - w.x, u.y - w.y) - (u.radius || 40);
+      if (d < r && d < bd) { bd = d; best = u; }
+    }
+    return best;
+  }
+
   function issueRightClick(allowAttack) {
     const p = me();
     if (!p || p.dead || world.over) return;
@@ -19329,6 +19873,9 @@ MOBA.registerChampion({
       } else if (e.button === 0 && attackArmed) {
         attackArmed = false;
         attackMoveTo(worldMouse());
+      } else if (e.button === 0 && hud && hud.extra) {
+        // clic izquierdo: seleccionar una unidad (sin atacar) para ver su panel; en el suelo, deselecciona
+        hud.extra.select(pickAny(worldMouse()));
       }
     });
     window.addEventListener('mouseup', function (e) { if (e.button === 2) rightHeld = false; });
@@ -19367,6 +19914,7 @@ MOBA.registerChampion({
       shiftHeld = e.shiftKey;
       if (code === 'Escape') {
         if (aiming != null || attackArmed) { setAiming(null); attackArmed = false; return; }
+        if (hud && hud.extra && hud.extra.selected && $('shop').classList.contains('hidden')) { hud.extra.select(null); return; }
         if (!$('shop').classList.contains('hidden')) hud.toggleShop(false); else togglePause();
         return;
       }
@@ -19513,6 +20061,8 @@ MOBA.registerChampion({
     get session() { return session; },
     get renderer() { return renderer; },
     hoverTarget: function () { return hoverTarget(); },
+    hud: function () { return hud; },
+    pickAny: function (x, y) { return pickAny({ x: x, y: y }); },
     get aiming() { return aiming; }
   };
 

@@ -461,6 +461,127 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
   await p5.close();
 
   // ---------- Multijugador ----------
+  // ---------- HUD estilo LoL: anuncios, panel de objetivo, resumen de muerte, compra parcial ----------
+  {
+    const ph = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+    watch(ph, '[hud]');
+    await ph.goto(url);
+    await ph.evaluate(() => MOBA.debug.startWith(['ignis', 'sol', 'bolt', 'bastion', 'rorik', 'pikachu', 'kaida', 'vex', 'mora', 'creeper']));
+    await frames(ph, 3);
+    const ann = await ph.evaluate(() => {
+      const g = MOBA.game, me = g.player, hud = MOBA.debug.hud();
+      const en = g.champions.filter((c) => c.team !== me.team), al = g.champions.filter((c) => c.team === me.team && c !== me);
+      const take = () => { hud.extra.pullFeed(); const q = hud.extra.queue.map((a) => a.title + ' | ' + a.sub); hud.extra.queue = []; return q.join(' || '); };
+      const dmg = (v, k) => { v.lastDamagers[k.id] = g.time; };
+      take();
+      const out = {};
+      dmg(en[0], me); g.kill(en[0], me); out.mineFirst = take();
+      dmg(en[1], al[0]); g.kill(en[1], al[0]); out.allyKill = take();
+      dmg(al[1], en[2]); g.kill(al[1], en[2]); out.allySlain = take();
+      g.time += 30;
+      dmg(en[3], me); g.kill(en[3], me); out.mine = take();
+      g.time += 30;
+      dmg(me, en[4]); me.recap = [{ t: g.time, s: en[4].id, l: 'Ataque básico', a: 420, k: 'physical' }, { t: g.time, s: en[4].id, l: en[4].def.abilities[0].name, a: 310, k: 'magic' }, { t: g.time, s: en[2].id, l: en[2].def.abilities[1].name, a: 200, k: 'magic' }];
+      g.kill(me, en[4]); out.died = take();
+      out.recap = hud.extra.lastRecap && hud.extra.lastRecap.total;
+      g.time += 30;
+      const k = al[2]; [en[1], en[2], en[3]].forEach((v) => { v.dead = false; v.hp = v.maxHp; });
+      dmg(en[1], k); g.kill(en[1], k); take(); dmg(en[2], k); g.kill(en[2], k); out.double = take();
+      dmg(en[3], k); g.kill(en[3], k); out.triple = take();
+      const t = MOBA.announceText;
+      out.towerOwn = t({ k: 'tower', team: me.team, lane: 'mid' }, me).title;
+      out.towerEnemy = t({ k: 'tower', team: 1 - me.team, lane: 'top' }, me).title;
+      out.ace = t({ k: 'ace', team: 1 - me.team }, me).title + ' / ' + t({ k: 'ace', team: me.team }, me).sub;
+      out.nexus = (t({ k: 'nexus', team: me.team }, me) || {}).title + ' / ' + t({ k: 'nexus', team: 1 - me.team }, me);
+      out.enemyView = t({ k: 'kill', killer: al[0].id, victim: en[0].id, team: me.team }, en[1], (id) => g.champions.find((c) => c.id === id)).title;
+      return out;
+    });
+    console.log('Anuncios:', JSON.stringify(ann));
+    check('anuncio: vos matás primero → "¡Primera sangre!" + "¡Has asesinado a un enemigo!"', /^¡Primera sangre! \| ¡Has asesinado a un enemigo!/.test(ann.mineFirst));
+    check('anuncio: un aliado mata → "¡Un enemigo ha sido asesinado!"', /^¡Un enemigo ha sido asesinado!/.test(ann.allyKill));
+    check('anuncio: matan a un aliado → "¡Un aliado ha sido asesinado!"', /^¡Un aliado ha sido asesinado!/.test(ann.allySlain));
+    check('anuncio: matás de nuevo → "¡Has asesinado a un enemigo!"', /^¡Has asesinado a un enemigo!/.test(ann.mine));
+    check('anuncio: te matan → "¡Has sido asesinado!"', /^¡Has sido asesinado!/.test(ann.died));
+    check('anuncio: asesinato doble y triple', /^¡Asesinato doble!/.test(ann.double) && /^¡Asesinato triple!/.test(ann.triple));
+    check('anuncio: torres, as y nexo según tu equipo', ann.towerOwn === '¡Destruyeron una de tus torres!' && ann.towerEnemy === '¡Tu equipo destruyó una torre!' && /^¡As! \/ Cayó todo tu equipo$/.test(ann.ace) && ann.nexus === '¡Tu nexo está bajo ataque! / null');
+    check('anuncio: el mismo asesinato visto por el enemigo dice "¡Un aliado ha sido asesinado!"', ann.enemyView === '¡Un aliado ha sido asesinado!');
+    check('resumen de muerte: suma el daño recibido (930)', ann.recap === 930);
+    await ph.evaluate(() => { const hud = MOBA.debug.hud(); hud.extra.recapShown = false; hud.slowTimer = 0; hud.update(0.3); });
+    await frames(ph, 3);
+    await shot('14-resumen-muerte.png', ph);
+    const recapTxt = await ph.textContent('#death-recap');
+    check('resumen de muerte visible al morir, con fuentes y habilidades', await ph.isVisible('#death-recap') && /Resumen de muerte/.test(recapTxt) && /Ataque básico/.test(recapTxt));
+    await ph.evaluate(() => {
+      const g = MOBA.game, me = g.player, hud = MOBA.debug.hud();
+      me.dead = false; me.hp = me.maxHp; me.respawnTimer = 0; hud.extra.lastRecap = null;
+      hud.extra.queue = []; hud.extra.cur = null; hud.extra.gap = 0;
+      const v = g.champions.find((c) => c.team !== me.team);
+      v.dead = false; v.lastDamagers[me.id] = g.time; me.lastKillAt = g.time - 2; me.multi = 1; g.kill(v, me);
+      g.paused = true;
+    });
+    for (let i = 0; i < 8; i++) await ph.evaluate(() => { MOBA.debug.hud().update(0.03); });
+    await ph.waitForTimeout(350);
+    const bannerTxt = await ph.textContent('#announce');
+    check('anuncio grande en pantalla con retratos', /¡Asesinato doble!/.test(bannerTxt) && (await ph.$$('#announce .ann-pic img')).length === 2);
+    await shot('12-anuncio.png', ph);
+    const tp = await ph.evaluate(() => {
+      const g = MOBA.game, me = g.player, r = MOBA.debug.renderer, hud = MOBA.debug.hud();
+      hud.extra.queue = []; hud.extra.cur = null; document.getElementById('announce').className = 'hidden';
+      const e = g.champions.find((c) => c.team !== me.team && c.def.id === 'vex');
+      e.dead = false; e.items = ['filo', 'grebas', 'daga']; e.recalc(false); e.hp = Math.round(e.maxHp * 0.62);
+      e.x = me.x + 250; e.y = me.y - 60; e.px = e.x; e.py = e.y; e.moveTarget = null; e.target = null;
+      if (g.units.indexOf(e) < 0) g.units.push(e);
+      e.addBuff({ type: 'slow', amount: 0.3, duration: 3 }); e.addBuff({ type: 'attackSpeed', amount: 0.4, duration: 5 });
+      r.camLocked = false; r.cam.x = me.x + 120; r.cam.y = me.y; r.userZoom = r.zoomTarget = 1.4; r.updateZoom();
+      return { id: e.id, x: e.x, y: e.y };
+    });
+    await frames(ph, 4);
+    const scr = await ph.evaluate((t) => MOBA.debug.renderer.worldToScreen(t.x, t.y, 60), tp);
+    await ph.mouse.click(scr.x, scr.y, { button: 'left' });
+    await ph.evaluate(() => { const h = MOBA.debug.hud(); h.slowTimer = 0; h.update(0.3); });
+    const panel = await ph.evaluate((id) => {
+      const g = MOBA.game, e = g.champions.find((c) => c.id === id), el = document.getElementById('target-panel');
+      const val = (lab) => { const s = [...el.querySelectorAll('.tp-stats span')].find((x) => x.querySelector('em').textContent === lab); return s ? s.querySelector('b').textContent : null; };
+      return { vis: !el.classList.contains('hidden'), sel: MOBA.debug.hud().extra.selected === e, name: (el.querySelector('.tp-name') || {}).textContent, hp: (el.querySelector('.tp-bar.hp span') || {}).textContent,
+        expHp: Math.ceil(e.hp) + ' / ' + Math.round(e.maxHp), ad: val('Daño'), expAd: String(Math.round(e.ad)), armor: val('Armadura'), expArmor: String(Math.round(e.getArmor())),
+        as: val('Vel. at.'), expAs: e.getAttackSpeed().toFixed(2), crit: val('Crítico'), expCrit: Math.round(e.critChance * 100) + '%', range: val('Alcance'), expRange: String(Math.round(e.attackRange)),
+        items: el.querySelectorAll('.tp-items img').length, buffs: el.querySelectorAll('.tp-buffs .buff').length, targetAfter: !!g.player.target };
+    }, tp.id);
+    console.log('Panel de objetivo:', JSON.stringify(panel));
+    check('panel de objetivo: clic izquierdo selecciona sin atacar', panel.vis && panel.sel && !panel.targetAfter && /Vex/.test(panel.name));
+    check('panel de objetivo: vida, daño, armadura, vel. de ataque, crítico y alcance correctos', panel.hp === panel.expHp && panel.ad === panel.expAd && panel.armor === panel.expArmor && panel.as === panel.expAs && panel.crit === panel.expCrit && panel.range === panel.expRange);
+    check('panel de objetivo: objetos y efectos con tiempo', panel.items === 3 && panel.buffs >= 2);
+    await frames(ph, 2);
+    await shot('13-panel-objetivo.png', ph);
+    await ph.keyboard.press('Escape');
+    check('Esc deselecciona la unidad', await ph.evaluate(() => !MOBA.debug.hud().extra.selected));
+    const pb = await ph.evaluate(() => {
+      const g = MOBA.game, p = g.player;
+      const f = g.map.fountains[p.team]; p.x = f.x; p.y = f.y; p.dead = false;
+      const out = {};
+      p.items = []; p.gold = 1000; p.undo = [];
+      out.msg1 = MOBA.debug.cmd({ t: 'buyPartial', item: 'filo' }); out.items1 = p.items.join(','); out.gold1 = p.gold;
+      p.items = []; p.gold = 500;
+      out.msg2 = MOBA.debug.cmd({ t: 'buyPartial', item: 'cuchilla' }); out.items2 = p.items.join(','); out.gold2 = p.gold;
+      p.items = ['espada']; p.gold = 1100;
+      out.msg3 = MOBA.debug.cmd({ t: 'buyPartial', item: 'cuchilla' }); out.items3 = p.items.join(','); out.gold3 = p.gold;
+      p.items = []; p.gold = 100;
+      out.msg4 = MOBA.debug.cmd({ t: 'buyPartial', item: 'filo' }); out.gold4 = p.gold;
+      return out;
+    });
+    console.log('Compra parcial:', JSON.stringify(pb));
+    check('compra parcial: con 1000 de oro para el Filo compra Espada (350) y Capa (600), queda 50', pb.items1 === 'espada,capa' && pb.gold1 === 50 && /compraste/.test(pb.msg1) && /faltan 2400 de oro/.test(pb.msg1));
+    check('compra parcial: baja por la receta (Cuchilla con 500 → Cristal de Rubí, queda 100)', pb.items2 === 'rubi' && pb.gold2 === 100);
+    check('compra parcial: respeta lo que ya tenés (Espada + 1100 → Gema 800, queda 300)', pb.items3 === 'espada,gema' && pb.gold3 === 300);
+    check('compra parcial: sin nada que alcance → "Oro insuficiente" y el oro no cambia', /^Oro insuficiente/.test(pb.msg4) && pb.gold4 === 100);
+    await ph.evaluate(() => { const p = MOBA.game.player, hud = MOBA.debug.hud(); p.items = []; p.gold = 1300; hud.shopTab = 'all'; hud.toggleShop(true); });
+    await ph.dblclick('#shop .scard[data-sel="filo"]');
+    await ph.waitForTimeout(300);
+    const toast = await ph.textContent('#shop .shop-toast').catch(() => '');
+    check('tienda: doble clic en un objeto caro muestra el aviso de compra parcial', /No te alcanza para .*compraste .* \(faltan \d+ de oro\)/.test(toast));
+    await shot('15-tienda-compra-parcial.png', ph);
+    await ph.close();
+  }
   async function multiplayer(mode) {
     const tag = mode === 'peer' ? 'PeerJS (2 navegadores)' : 'local (BroadcastChannel)';
     const bB = mode === 'peer' ? await chromium.launch({ args: ARGS }) : browser;

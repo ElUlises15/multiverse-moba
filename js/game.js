@@ -69,8 +69,9 @@
     }
 
     // ---------- Utilidades ----------
-    addFeed(text, color, to) {
-      this.feed.push({ id: ++this.seq, text: text, color: color || '#fff', time: this.time, to: to || null });
+    /** Aviso en el feed. `ann` (opcional) = anuncio grande estilo LoL ({ k: 'kill'|'ace'|'tower'|'nexus', … }); el texto según la perspectiva lo arma el HUD. */
+    addFeed(text, color, to, ann) {
+      this.feed.push({ id: ++this.seq, text: text, color: color || '#fff', time: this.time, to: to || null, ann: ann || null });
       if (this.feed.length > 30) this.feed.shift();
     }
     /** Texto flotante; `to` = ids de los campeones que lo ven (null = todos). */
@@ -145,6 +146,7 @@
           if (c.learn(cmd.s | 0)) { this.particles(c.x, c.y, '#ffe45a', 10, 250); return null; }
           return 'no';
         case 'buy': return this.buyItem(c, String(cmd.item));
+        case 'buyPartial': return this.buyPartial(c, String(cmd.item));
         case 'sell': return this.sellItem(c, cmd.i | 0);
         case 'undo': return this.undoShop(c);
         case 'ping': {
@@ -259,6 +261,21 @@
       c.undo.push({ t: 'buy', id: id, cost: plan.cost, consumed: consumed });
       if (c.undo.length > 20) c.undo.shift();
       return null;
+    }
+    /** Doble clic / clic derecho en un objeto que no te alcanza: compra los componentes que sí podés pagar.
+     *  Devuelve el texto para mostrar (empieza con "✔" si compró algo). */
+    buyPartial(c, id) {
+      const it = M.itemById[id];
+      if (!it) return 'Objeto inexistente';
+      const direct = M.canBuy(c, id, this.canShop(c));
+      if (!direct) { this.buyItem(c, id); return '✔ Compraste ' + M.itemName(id); }
+      if (direct !== 'No te alcanza el oro') return direct;
+      const plan = M.partialBuyPlan(c, id);
+      if (!plan.buys.length) return 'Oro insuficiente: te faltan ' + Math.ceil(M.purchasePlan(c.items, id).cost - c.gold) + ' de oro para ' + M.itemName(id);
+      for (const b of plan.buys) this.buyItem(c, b);
+      const names = plan.buys.map(function (b) { return M.itemName(b); });
+      const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' y ' + names[names.length - 1] : names[0];
+      return '✔ No te alcanza para ' + M.itemName(id) + ': compraste ' + list + ' (faltan ' + plan.missing + ' de oro)';
     }
     sellItem(c, index) {
       if (!this.canShop(c)) return 'Tenés que estar en la base para vender';
@@ -828,7 +845,7 @@
       // Malla de Espinas: devuelve daño mágico al atacante
       if (basic && t.passives && t.passives.thorns && src && !src.dead && src.type !== 'tower') {
         const bonusArmor = Math.max(0, t.armor - M.growth(t.def.stats.armor, t.def.stats.armorPerLevel, t.level));
-        this.damage(t, src, 20 + 0.1 * bonusArmor, 'magic', { noText: !t.human && !src.human });
+        this.damage(t, src, 20 + 0.1 * bonusArmor, 'magic', { noText: !t.human && !src.human, label: 'Malla de Espinas' });
       }
       const total = dmg;
       for (const b of t.buffs) {
@@ -836,6 +853,17 @@
       }
       if (t.hasBuff('undying') && t.hp - dmg < 1) dmg = Math.max(0, t.hp - 1);
       t.hp -= dmg; t.flash = 0.1; t.lastHurt = this.time; t.lastCombat = this.time;
+      // resumen de muerte: quién te pegó y con qué (últimos segundos)
+      if (t.type === 'champion' && total > 0) {
+        const r = t.recap || (t.recap = []);
+        const label = (opts && opts.label) || (basic ? (opts.crit ? 'Ataque básico (crítico)' : 'Ataque básico') : !src ? 'Fuente enemiga' : src.type === 'tower' ? 'Disparo de torre' : src.type === 'minion' ? 'Ataque de súbdito' : src.type === 'monster' ? 'Ataque de monstruo' : 'Habilidad');
+        r.push({ t: this.time, s: src ? src.id : 0, l: label, a: total, k: kind });
+        if (r.length > 80) r.shift();
+      }
+      if (t.type === 'nexus' && src && this.time - (t.lastWarn || -99) > 20) {
+        t.lastWarn = this.time;
+        this.addFeed('¡El nexo ' + M.TEAM_NAMES[t.team] + ' está bajo ataque!', M.TEAM_COLORS[1 - t.team], null, { k: 'nexus', team: t.team });
+      }
       t.lastHitBy = src ? src.id : 0;
       if (src) src.lastCombat = this.time;
       if (t.recalling && dmg > 0) t.recalling = null;
@@ -909,10 +937,25 @@
         }
         this.score[1 - t.team]++;
         const kc = M.TEAM_COLORS[1 - t.team];
-        if (killer) this.addFeed(killer.name + ' eliminó a ' + t.name, kc);
-        else this.addFeed(t.name + ' fue ejecutado', kc);
+        // anuncio: primera sangre, multiasesinatos (10 s entre muertes), rachas y "racha cortada"
+        const first = !!killer && !this.firstBloodDone;
+        if (first) this.firstBloodDone = true;
+        let multi = 0, spree = 0;
+        if (killer) {
+          killer.multi = this.time - (killer.lastKillAt == null ? -99 : killer.lastKillAt) <= 10 ? (killer.multi || 0) + 1 : 1;
+          killer.lastKillAt = this.time; killer.spree = (killer.spree || 0) + 1;
+          multi = killer.multi; spree = killer.spree;
+        }
+        const ended = t.spree || 0;
+        t.spree = 0; t.multi = 0;
+        const by = killer ? '' : !src ? 'la fuente' : src.type === 'tower' ? 'una torre' : src.type === 'minion' ? 'los súbditos' : src.type === 'monster' ? 'un monstruo' : '';
+        const ann = { k: 'kill', killer: killer ? killer.id : 0, by: by, victim: t.id, team: 1 - t.team, assists: helpers.map(function (a) { return a.id; }),
+          first: first, multi: multi, spree: spree, shutdown: ended >= 3 ? ended : 0, recap: this.deathRecap(t) };
+        if (killer) this.addFeed(killer.name + ' eliminó a ' + t.name, kc, null, ann);
+        else this.addFeed(t.name + ' fue ejecutado por ' + (by || 'el entorno'), kc, null, ann);
+        if (this.champions.every(function (c) { return c.team !== t.team || c.dead; })) this.addFeed('¡As! Cayó todo el equipo ' + M.TEAM_NAMES[t.team], kc, null, { k: 'ace', team: t.team });
         if (t.human) this.addFeed('Te eliminaron. Reaparecés en ' + Math.ceil(t.respawnTimer) + ' s', '#ff8a8a', [t.id]);
-        t.lastDamagers = {};
+        t.lastDamagers = {}; t.recap = [];
         this.particles(t.x, t.y, t.def.color, 30, 500);
         this.pushFx({ type: 'ring', x: t.x, y: t.y, r0: 20, r1: 300, color: tc, life: 0.6, max: 0.6 });
       } else if (t.type === 'tower') {
@@ -924,7 +967,7 @@
           c.gainGold(this, 50 + local, c.human);
           if (local) c.gainXp(this, 150);
         }
-        this.addFeed('Cayó una torre del carril ' + M.LANE_NAMES[t.lane] + ' (equipo ' + M.TEAM_NAMES[t.team] + ')', M.TEAM_COLORS[1 - t.team]);
+        this.addFeed('Cayó una torre del carril ' + M.LANE_NAMES[t.lane] + ' (equipo ' + M.TEAM_NAMES[t.team] + ')', M.TEAM_COLORS[1 - t.team], null, { k: 'tower', team: t.team, lane: t.lane });
         this.particles(t.x, t.y, '#aaa', 40, 600);
         this.shake = Math.max(this.shake, 10);
       } else if (t.type === 'nexus') {
@@ -934,6 +977,28 @@
         this.shake = 20;
         if (this.onGameOver) this.onGameOver(this.winner);
       }
+    }
+
+    /** Resumen de los últimos 15 s de daño recibido: por fuente y por habilidad. */
+    deathRecap(t) {
+      const since = this.time - 15, by = {};
+      let total = 0;
+      for (const e of t.recap || []) {
+        if (e.t < since) continue;
+        const key = e.s || ('x' + e.l);
+        const src = e.s ? this.units.find(function (u) { return u.id === e.s; }) || this.champions.find(function (u) { return u.id === e.s; }) : null;
+        const row = by[key] || (by[key] = { id: e.s, name: src ? (src.name || 'Unidad') : 'Fuente', type: src ? src.type : 'fountain', df: src && src.def ? src.def.id : '', team: src ? src.team : 1 - t.team, total: 0, parts: {} });
+        row.total += e.a; total += e.a;
+        const pk = e.l + '|' + e.k;
+        row.parts[pk] = (row.parts[pk] || 0) + e.a;
+      }
+      const rows = Object.keys(by).map(function (k) {
+        const r = by[k];
+        r.total = Math.round(r.total);
+        r.parts = Object.keys(r.parts).map(function (pk) { const sp = pk.split('|'); return { l: sp[0], k: sp[1], a: Math.round(r.parts[pk]) }; }).sort(function (a, b) { return b.a - a.a; }).slice(0, 5);
+        return r;
+      }).sort(function (a, b) { return b.total - a.total; }).slice(0, 6);
+      return { total: Math.round(total), rows: rows };
     }
 
     onLevelUp(c) {
