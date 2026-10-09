@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browser Multiverse MOBA</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Pantalla de selección de campeón -->
+  <div id="select-screen" class="screen">
+    <header class="select-header">
+      <h1>Browser <span>Multiverse</span> MOBA</h1>
+      <p class="subtitle">MOBA 5 contra 5 en 3D, en el navegador · jugá solo contra bots o con amigos por internet</p>
+    </header>
+    <div id="mode-bar">
+      <button id="mode-solo" class="mode-btn active">Jugar solo</button>
+      <button id="mode-host" class="mode-btn">Crear sala</button>
+      <button id="mode-join" class="mode-btn">Unirse a una sala</button>
+      <label class="name-field">Tu nombre: <input id="player-name" maxlength="16" placeholder="Invocador"></label>
+    </div>
+    <div id="tab-solo" class="mode-tab"></div>
+    <div id="tab-host" class="mode-tab hidden">
+      <p>Creá una sala y pasales el <b>código</b> a tus amigos. Cada uno elige campeón y equipo; los lugares vacíos los ocupan bots.
+      Tu navegador hace de servidor (P2P con WebRTC): dejá esta pestaña abierta mientras juegan.</p>
+      <button id="create-room-btn" class="big-btn">Crear sala</button>
+    </div>
+    <div id="tab-join" class="mode-tab hidden">
+      <p>Escribí el código que te pasó quien creó la sala.</p>
+      <input id="join-code" maxlength="8" placeholder="CÓDIGO" autocomplete="off"> <button id="join-room-btn" class="big-btn">Unirme</button>
+    </div>
+    <div class="net-options"><label><input type="checkbox" id="local-mode"> Modo local (pestañas de este mismo navegador, sin internet)</label>
+      <span id="net-note"></span> <span id="menu-msg"></span></div>
+    <div id="role-filters"></div>
+    <div id="select-layout">
+      <div id="champ-grid"></div>
+      <div id="champ-detail"></div>
+    </div>
+    <div class="controls-help">
+      <b>Controles:</b> Clic derecho: mover / atacar (no hace falta clic exacto: toma al enemigo más cercano al cursor, campeones primero) ·
+      <b>A</b>: atacar-mover hacia el cursor (o <b>A</b> + clic izquierdo) · <b>Shift</b> (mantener): apuntar solo a campeones ·
+      Tu campeón ataca solo a lo que tenga en rango cuando está quieto<br>
+      <b>Subir habilidades:</b> botón <b>+</b> sobre Q/W/E/R o <b>Ctrl/Alt + Q W E R</b> (empezás con 1 punto; la R se aprende en los niveles 6, 11 y 16) ·
+      <b>Q W E R</b>: mantener para ver el alcance, soltar para lanzar hacia el mouse (clic derecho cancela) · <b>C</b> (mantener): ver tu alcance de ataque ·
+      <b>B</b>: volver a la base (8 s) · <b>P</b>: tienda · <b>Tab</b>: marcador · <b>Y</b>: fijar/soltar cámara ·
+      <b>Espacio</b>: centrar cámara · <b>S</b>: frenar · <b>Rueda</b>: zoom · <b>Esc</b>: pausa / menú<br>
+      <b>Mapa:</b> las paredes de la jungla se esquivan solas al hacer clic del otro lado · en los <b>arbustos</b> no te ven si el rival no tiene a nadie adentro ·
+      al salir de tu base corrés +75% más rápido hasta entrar en combate
+    </div>
+  </div>
+
+  <!-- Sala multijugador -->
+  <div id="lobby-screen" class="screen hidden">
+    <header class="lobby-header">
+      <div><div class="lobby-label">Código de la sala</div><div id="lobby-code">-----</div></div>
+      <div class="lobby-share"><button id="lobby-copy">Copiar</button><div id="lobby-mode"></div><div id="lobby-link"></div></div>
+      <div class="lobby-actions"><span id="lobby-count"></span><button id="lobby-start" class="big-btn">¡Empezar partida!</button>
+        <span id="lobby-wait">Esperando a que el anfitrión empiece…</span><button id="lobby-leave">Salir</button></div>
+    </header>
+    <div id="lobby-teams">
+      <div class="team-col blue"><h3>Equipo Azul</h3><div id="lobby-team-blue"></div><button id="lobby-blue">Unirme al Azul</button></div>
+      <div class="team-col red"><h3>Equipo Rojo</h3><div id="lobby-team-red"></div><button id="lobby-red">Unirme al Rojo</button></div>
+    </div>
+    <div id="lobby-pick"><div id="lobby-grid"></div><div id="lobby-detail"></div></div>
+  </div>
+
+  <!-- Partida -->
+  <div id="game-screen" class="screen hidden">
+    <canvas id="game-canvas"></canvas>
+    <canvas id="overlay-canvas"></canvas>
+    <div id="hud">
+      <div id="topbar">
+        <span class="team-score blue" id="score-blue">0</span>
+        <span id="timer">00:00</span>
+        <span class="team-score red" id="score-red">0</span>
+      </div>
+      <div id="killfeed"></div>
+      <div id="bottom-panel">
+        <div id="portrait-wrap">
+          <canvas id="portrait-canvas" width="84" height="84"></canvas>
+          <div id="level-badge">1</div>
+        </div>
+        <div id="center-panel">
+          <div id="skill-points"></div>
+          <div id="abilities"></div>
+          <div class="bar hp"><div class="fill"></div><div class="shield"></div><span></span></div>
+          <div class="bar mana"><div class="fill"></div><span></span></div>
+          <div class="bar xp"><div class="fill"></div></div>
+        </div>
+        <div id="side-panel">
+          <div id="stats"></div>
+          <div id="gold-line"><span id="gold">0</span> oro <button id="shop-btn" title="Tienda (P)">Tienda</button></div>
+          <div id="items"></div>
+        </div>
+      </div>
+      <div id="minimap-wrap"><canvas id="minimap" width="220" height="220"></canvas></div>
+      <div id="status-line"></div>
+      <div id="death-overlay" class="hidden"></div>
+      <div id="tooltip" class="hidden"></div>
+      <div id="scoreboard" class="hidden"></div>
+      <div id="shop" class="hidden"></div>
+      <div id="pause" class="hidden">
+        <div class="panel">
+          <h2 id="pause-title">Pausa</h2>
+          <button id="resume-btn">Continuar</button>
+          <button id="quit-btn">Abandonar partida</button>
+        </div>
+      </div>
+      <div id="endscreen" class="hidden"></div>
+    </div>
+  </div>
+
+  <!-- Bibliotecas incluidas en el repo (sin CDN): Three.js r180 y PeerJS 1.5.5 -->
+  <script src="vendor/three.min.js"></script>
+  <script src="vendor/peerjs.min.js"></script>
+  <!-- Núcleo -->
+  <script src="js/core.js"></script>
+  <script src="js/art.js"></script>
+  <!-- Campeones: un archivo de datos por campeón (ver README.md) -->
+  <script src="js/champions/granito.js"></script>
+  <script src="js/champions/bastion.js"></script>
+  <script src="js/champions/kaida.js"></script>
+  <script src="js/champions/rorik.js"></script>
+  <script src="js/champions/ignis.js"></script>
+  <script src="js/champions/lyra.js"></script>
+  <script src="js/champions/vex.js"></script>
+  <script src="js/champions/bolt.js"></script>
+  <script src="js/champions/sol.js"></script>
+  <script src="js/champions/mora.js"></script>
+  <!-- Arte 3D procedural (generado con Claude y Codex, revisado e integrado a mano) -->
+  <script src="js/art/art_granito.js"></script>
+  <script src="js/art/art_bastion.js"></script>
+  <script src="js/art/art_kaida.js"></script>
+  <script src="js/art/art_rorik.js"></script>
+  <script src="js/art/art_ignis.js"></script>
+  <script src="js/art/art_lyra.js"></script>
+  <script src="js/art/art_vex.js"></script>
+  <script src="js/art/art_bolt.js"></script>
+  <script src="js/art/art_sol.js"></script>
+  <script src="js/art/art_mora.js"></script>
+  <script src="js/art/art_units.js"></script>
+  <script src="js/art/art_props.js"></script>
+  <script src="js/art/art_items.js"></script>
+  <!-- Motor (simulación: no depende del dibujo) -->
+  <script src="js/items.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/abilities.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/net.js"></script>
+  <!-- Presentación -->
+  <script src="js/render3d.js"></script>
+  <script src="js/portraits.js"></script>
+  <script src="js/hud.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/lobby.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

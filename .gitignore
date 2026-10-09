@@ -1,0 +1,18 @@
+# Dependencias (Playwright se instala aparte para los tests)
+node_modules/
+package-lock.json
+
+# Artefactos de tests
+test-results/
+playwright-report/
+*.log
+tmp/
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# screenshots/, vendor/ y dist/ se versionan a propósito
