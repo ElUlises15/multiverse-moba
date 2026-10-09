@@ -18,15 +18,16 @@ window.MOBA = window.MOBA || {};
   M.defineWallMaterial = function (fn) { Art.wallMaterial = fn; };
 
   /** Caché de materiales y geometrías compartidas (para no crear miles de objetos). */
-  Art.makeCache = function (THREE) {
+  Art.makeCache = function (THREE, opt) {
     const mats = {}, geos = {};
+    const toon = opt && opt.toon;   // modo anime: materiales toon (cel shading)
     return {
       mat: function (color, opts) {
         opts = opts || {};
         const key = String(color) + JSON.stringify(opts);
         if (!mats[key]) {
           const o = Object.assign({ color: color, flatShading: true, roughness: 0.8, metalness: 0.05 }, opts);
-          mats[key] = new THREE.MeshStandardMaterial(o); mats[key].__cached = true;
+          mats[key] = toon ? toon.toonMaterial(THREE, o) : new THREE.MeshStandardMaterial(o); mats[key].__cached = true;
         }
         return mats[key];
       },

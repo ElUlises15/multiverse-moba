@@ -20,7 +20,7 @@ window.MOBA = window.MOBA || {};
     teamShapes: false,
     teamColors: ['#38a3ff', '#ff4a4a'],
     camZoom: 1, camPitch: 56, edgePan: 1500, camLockDefault: true, camSmooth: 10,
-    uiScale: 1, quality: 'high', shadows: true,
+    uiScale: 1, quality: 'high', shadows: true, anime: false,
     master: 80, music: 55, sfx: 80, mute: false,
     showFps: false, minionBars: 'damaged', lastHit: true, hpTicks: true, showNames: true, damageNumbers: true
   };
@@ -181,6 +181,7 @@ window.MOBA = window.MOBA || {};
         case 'graficos':
           return this.row('Calidad', this.select('quality', [['low', 'Baja'], ['medium', 'Media'], ['high', 'Alta']]), 'Resolución interna del 3D') +
             this.row('Sombras', this.check('shadows')) +
+            this.row('Estilo anime (experimental)', this.check('anime'), 'Sombreado toon con contornos, colores más vivos y modelos hechos en Blender (por ahora: Ignis). Se aplica en la próxima partida. También: ?anime=1') +
             this.row('Tamaño de la interfaz', this.range('uiScale', 0.75, 1.5, 0.05, f.uiScale));
         case 'audio':
           return this.row('Volumen general', this.range('master', 0, 100, 1, f.master)) +

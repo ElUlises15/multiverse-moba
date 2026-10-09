@@ -66,6 +66,15 @@ Los navegadores intentan conectarse **directo** (con ayuda de STUN). Cuando los 
 
 Al terminar aparecen **Volver a la sala (revancha)** —el anfitrión vuelve a la misma sala con los mismos amigos y puede empezar otra— y **Menú principal**. Todo se cierra prolijo (conexiones, simulación, escena 3D, `?sala=` de la dirección), así que se puede crear o unirse a otra sala sin recargar la página. Si el anfitrión abandona, los demás vuelven al menú con un aviso.
 
+### Modo anime (experimental, rama `anime`)
+
+Activalo con `?anime=1` en la dirección o en **Configuración → Gráficos → Estilo anime**. Cambia a sombreado toon (cel shading de 3 escalones con `MeshToonMaterial`), contornos negros con "casco invertido" en los campeones y colores más vivos. Ignis usa un **modelo 3D hecho en Blender** (`assets/models/ignis_anime.glb`: unos 10 mil triángulos, esqueleto de 16 huesos y animaciones `idle`, `run`, `attack`, `cast`, `death` y `recall`) que se carga con `GLTFLoader` (vendorizado en `vendor/three-gltf.min.js`). Si el GLB no carga (por ejemplo, abriendo el dist con `file://`), se usa el Ignis procedural.
+
+- El modelo se genera con un script: `blender -b -P tools/blender/ignis_anime.py -- assets/models/ignis_anime.glb ignis.blend`
+- Render toon de comparación: `blender -b ignis.blend -P tools/blender/render_toon.py -- screenshots/anime`
+- Capturas en el juego: `node tools/anime_shots.js http://localhost:8765/` (con la carpeta servida por http)
+- Capturas en `screenshots/anime/`.
+
 ### Controles
 
 | Tecla | Acción |

@@ -34,12 +34,14 @@
       this.gl = new T.WebGLRenderer({ canvas: canvas, antialias: this.quality !== 'low', powerPreference: 'high-performance' });
       this.gl.setPixelRatio(this.pixelRatio());
       this.gl.outputColorSpace = T.SRGBColorSpace;
-      this.gl.toneMapping = T.ACESFilmicToneMapping; this.gl.toneMappingExposure = 1.05;
+      this.anime = !!(M.Anime && M.Anime.enabled());
+      this.gl.toneMapping = this.anime ? T.NeutralToneMapping : T.ACESFilmicToneMapping; this.gl.toneMappingExposure = this.anime ? 1.0 : 1.05;
       this.gl.shadowMap.enabled = this.shadowsOn(); this.gl.shadowMap.type = T.PCFSoftShadowMap;
       this.scene = new T.Scene();
       this.scene.background = new T.Color(0x0a1420);
       this.camera = new T.PerspectiveCamera(FOV, 1, 100, 40000);
-      this.cache = M.Art.makeCache(T);
+      this.cache = M.Art.makeCache(T, this.anime ? { toon: M.Anime } : null);
+      if (this.anime) { const self = this; M.Anime.load(function (id) { if (!self.disposed) self.swapModel(id); }); }
       this.views = new Map(); this.projViews = new Map(); this.zoneViews = new Map(); this.fxViews = []; this.pools = {};
       this.lastFx = 0; this.animated = []; this.artErrors = {};
       this.ray = new T.Raycaster(); this.plane = new T.Plane(new T.Vector3(0, 1, 0), 0);
@@ -75,8 +77,8 @@
 
     // ================= Escena estática =================
     buildLights() {
-      this.scene.add(new T.HemisphereLight(0xcfe3ff, 0x3d4a2a, 1.25));
-      const sun = this.sun = new T.DirectionalLight(0xfff1d6, 2.1);
+      this.scene.add(new T.HemisphereLight(0xcfe3ff, 0x3d4a2a, this.anime ? 1.5 : 1.25));
+      const sun = this.sun = new T.DirectionalLight(0xfff1d6, this.anime ? 2.4 : 2.1);
       sun.castShadow = this.shadowsOn();
       sun.shadow.mapSize.set(2048, 2048);
       const sc = sun.shadow.camera; sc.left = -2400; sc.right = 2400; sc.top = 2400; sc.bottom = -2400; sc.near = 100; sc.far = 9000;
@@ -387,6 +389,9 @@
         color: def ? toHex(def.color) : 0xcccccc, accent: def ? toHex(def.accent) : 0xffffff };
     }
     buildModel(artId, spec, ctx, fallback) {
+      if (this.anime && M.Anime.has(artId)) {
+        try { return M.Anime.build(T, artId); } catch (e) { console.warn('Modelo anime ' + artId + ' falló; uso el procedural', e); M.Anime.failed[artId] = true; delete M.Anime.gltf[artId]; }
+      }
       if (spec && !this.artErrors[artId]) {
         try {
           const m = spec.build(T, ctx);
@@ -409,7 +414,8 @@
       if (!model) {
         if (u.type === 'champion') model = this.buildModel(artId, M.Art.champions[u.def.id], this.artCtx(u.team, u.def), this.fallbackChampion);
         else model = this.buildModel(artId, M.Art.units[artId], this.artCtx(u.team), this.fallbackUnit(u));
-        model.object.traverse(function (o) { if (o.isMesh) { o.castShadow = u.type !== 'minion'; o.receiveShadow = false; } });
+        model.object.traverse(function (o) { if (o.isMesh && !o.userData.isOutline) { o.castShadow = u.type !== 'minion'; o.receiveShadow = false; } });
+        if (this.anime && !model.anime && u.type === 'champion') M.Anime.outlineModel(T, model.object, 1.4, 12);
         const box = new T.Box3().setFromObject(model.object), sz = new T.Vector3(); box.getSize(sz);
         model.height = isFinite(sz.y) && sz.y > 0 ? Math.min(sz.y, u.type === 'tower' ? 700 : 420) : 200;
       }
@@ -530,10 +536,27 @@
       }
     }
 
+    /** Cambia el modelo procedural por el GLB anime cuando terminó de cargar. */
+    swapModel(artId) {
+      for (const v of this.views.values()) {
+        if (v.artId !== artId || (v.model && v.model.anime)) continue;
+        const ghost = v.ghost; if (ghost) this.setGhost(v, false);
+        const model = this.buildModel(artId, null, null, function () { return v.model; });
+        if (model === v.model) continue;
+        v.root.remove(v.model.object);
+        model.object.traverse(function (o) { if (o.isMesh && !o.userData.isOutline) o.castShadow = true; });
+        model.height = v.model.height;
+        v.root.add(model.object);
+        model.object.rotation.y = v.face;
+        v.model = model;
+        if (ghost) this.setGhost(v, true);
+      }
+    }
     setGhost(v, on) {
       v.ghost = on;
       const gm = this.ghostMat;
       v.model.object.traverse(function (o) {
+        if (o.userData.isOutline) { o.visible = !on; return; }
         if (!o.isMesh && !o.isPoints) return;
         if (on) { o.userData.realMat = o.material; o.material = gm; }
         else if (o.userData.realMat) { o.material = o.userData.realMat; delete o.userData.realMat; }
