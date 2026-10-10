@@ -18,11 +18,26 @@
     </header>
     <div id="mode-bar">
       <button id="mode-solo" class="mode-btn active">Jugar solo</button>
-      <button id="mode-host" class="mode-btn">Crear sala</button>
-      <button id="mode-join" class="mode-btn">Unirse a una sala</button>
+      <button id="mode-online" class="mode-btn">Jugar online</button>
+      <button id="mode-other" class="mode-btn">Otros modos (P2P / local)</button>
       <label class="name-field">Tu nombre: <input id="player-name" maxlength="16" placeholder="Invocador"></label>
     </div>
+    <div id="other-bar" class="hidden">
+      <button id="mode-host" class="mode-btn small">Crear sala P2P</button>
+      <button id="mode-join" class="mode-btn small">Unirse a una sala P2P</button>
+      <span class="other-note">Sin servidor: el navegador de quien crea la sala hace de servidor (si cierra la pestaña, se termina la partida).</span>
+    </div>
     <div id="tab-solo" class="mode-tab"></div>
+    <div id="tab-online" class="mode-tab hidden">
+      <div id="online-status" class="online-status"></div>
+      <div id="online-offline" class="hidden"><button id="online-retry">Reintentar</button> <button id="online-p2p" class="big-btn">Jugar por P2P</button></div>
+      <div id="online-main" class="hidden">
+        <p>Las partidas corren en el servidor: siguen aunque alguien cierre la pestaña, y podés <b>entrar a una partida en curso</b> tomando el lugar de un bot. Si se te corta, tenés 60 s para volver con el mismo campeón.</p>
+        <div class="online-create"><input id="online-room-name" maxlength="28" placeholder="Nombre de la sala (opcional)"> <button id="online-create" class="big-btn">Crear sala</button> <button id="online-refresh">Actualizar lista</button> <span id="online-msg"></span></div>
+        <div id="online-bots" class="hidden"></div>
+        <div id="online-rooms"></div>
+      </div>
+    </div>
     <div id="tab-host" class="mode-tab hidden">
       <p>Creá una sala y pasales el <b>código</b> a tus amigos. Cada uno elige campeón y equipo; los lugares vacíos los ocupan bots.
       Tu navegador hace de servidor (P2P con WebRTC): dejá esta pestaña abierta mientras juegan.</p>
@@ -33,7 +48,7 @@
       <input id="join-code" maxlength="8" placeholder="CÓDIGO" autocomplete="off"> <button id="join-room-btn" class="big-btn">Unirme</button>
       <div id="join-status" class="join-status hidden"><span id="join-status-text"></span> <button id="join-retry" class="hidden">Reintentar</button></div>
     </div>
-    <div class="net-options"><label><input type="checkbox" id="local-mode"> Modo local (pestañas de este mismo navegador, sin internet)</label>
+    <div class="net-options"><label id="local-wrap" class="hidden"><input type="checkbox" id="local-mode"> Modo local (pestañas de este mismo navegador, sin internet)</label>
       <span id="net-note"></span> <span id="menu-msg"></span></div>
     <div id="role-filters"></div>
     <div id="select-layout">
@@ -132,6 +147,7 @@
   <script src="vendor/peerjs.min.js"></script>
   <!-- Núcleo -->
   <script src="js/core.js"></script>
+  <script src="js/config.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/fullscreen.js"></script>
   <script src="assets/music/tracks.js"></script>
@@ -191,6 +207,7 @@
   <script src="js/hud_extra.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/lobby.js"></script>
+  <script src="js/online.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

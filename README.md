@@ -37,11 +37,29 @@ En la pantalla de inicio tenés tres pestañas:
 
 Ganás cuando destruís el **nexo** enemigo.
 
-## Multijugador con amigos
+## Jugar online (servidor dedicado, modo principal)
 
-1. Uno hace de **anfitrión**: pone su nombre, va a **Crear sala** y toca **Crear sala**. Aparece la sala con un código (por ejemplo `K7QXM`) y un link.
+Desde la versión con servidor, **Jugar online** es el modo de fábrica: la partida corre en un **servidor nuestro** (Node.js), no en la compu de nadie. Por eso:
+
+- **Cerrar la pestaña no termina la partida.** Si alguien se va, un **bot toma su campeón** al instante y la partida sigue (aunque se vayan todos; una partida sin nadie se cierra sola a los 2 minutos).
+- **Volver dentro de 60 s** (mismo navegador): recuperás tu campeón automáticamente. El lugar queda reservado ese minuto.
+- **Lista de partidas**: en *Jugar online* ves todas las salas con nombre, quién la creó, personas/bots por equipo, si está *En sala* o *En curso* y cuánto tiempo lleva. Se actualiza sola.
+- **Crear sala**: poné un nombre y tocá *Crear sala*. Quien la crea (👑) elige cuándo empezar. También podés compartir el link (`?partida=CÓDIGO`).
+- **Unirse a una partida en curso**: tocá *Unirse a partida en curso* y elegí cualquier bot libre de cualquier equipo (se ve campeón, equipo, nivel y KDA). Lo controlás al instante, con su nivel, oro y objetos.
+- **Revancha**: al terminar, *Volver a la sala* junta a todos en la misma sala para jugar otra.
+- Cada equipo recibe solo lo que ve (niebla de guerra), unas 20 fotos por segundo; el servidor simula a 60 pasos por segundo.
+
+La dirección del servidor está en `js/config.js` (`SERVER_URL`). Para probar otro servidor sin tocar código: `index.html?server=wss://mi-servidor.com/ws` (o `?server=http://localhost:8080`). Si el servidor no responde, el menú dice **"Servidores fuera de línea"** y ofrece jugar por P2P. Los servidores gratis "se duermen": la primera conexión puede tardar hasta un minuto en despertarlo.
+
+Cómo levantar y publicar el servidor: ver [`server/README.md`](server/README.md).
+
+## Otros modos: sala P2P entre amigos y modo local
+
+En el menú, **Otros modos (P2P / local)** muestra *Crear sala P2P* y *Unirse a una sala P2P*. Funcionan como antes, sin servidor nuestro:
+
+1. Uno hace de **anfitrión**: pone su nombre, va a **Otros modos → Crear sala P2P** y toca **Crear sala**. Aparece la sala con un código (por ejemplo `K7QXM`) y un link.
 2. Le pasa el **código** o el **link** a sus amigos (botón **Copiar**). El link es la dirección del juego con `?sala=K7QXM` al final y ya completa el código.
-3. Los amigos abren el juego, van a **Unirse a una sala**, escriben el código y entran.
+3. Los amigos abren el juego, van a **Otros modos → Unirse a una sala P2P**, escriben el código y entran.
 4. En la sala, cada uno elige **equipo** (Azul o Rojo, hasta 5 por equipo) y **campeón** (no se repite dentro del mismo equipo). Los lugares vacíos los ocupan **bots**.
 5. El anfitrión toca **¡Empezar partida!**. Pueden jugar desde 1 contra bots hasta 5 contra 5 entre personas.
 
@@ -247,6 +265,7 @@ index.html            Página principal (carga los scripts en orden)
 css/style.css         Estilos de la interfaz
 vendor/               Three.js r180 y PeerJS 1.5.5 (copiados, con sus licencias MIT)
 js/core.js            Registro de campeones (MOBA.registerChampion) y utilidades
+js/config.js          Dirección del servidor online (SERVER_URL)
 js/settings.js        Configuración (localStorage) y su menú
 js/audio.js           Música (archivos o generada) y efectos de sonido
 assets/music/         menu.mp3, batalla.mp3 y tracks.js (qué archivo usar)
@@ -265,7 +284,9 @@ js/portraits.js       Retratos 3D, vista previa animada e íconos de objetos
 js/hud.js             HUD, tienda, marcador y pantalla final
 js/ui.js              Selección de campeón (con historia, frase y vista previa)
 js/lobby.js           Menú de inicio y sala multijugador
+js/online.js          Modo "Jugar online": conexión al servidor, lista de partidas y tomar bots
 js/main.js            Arranque, controles, cámara y bucle principal
+server/               Servidor dedicado (Node.js + ws): reutiliza la simulación de js/ (ver server/README.md)
 docs/ARTE-3D.md       Especificación del arte 3D (la que siguieron Claude y Codex)
 tools/build.js        Genera dist/multiverse-moba.html (node tools/build.js)
 tools/test.js         Test automático con Playwright

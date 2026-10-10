@@ -1,0 +1,26 @@
+# Blueprint de Render: servidor online de Multiverse MOBA (plan gratis).
+# En Render: New > Blueprint > elegí este repo. Ver server/README.md.
+# Nota: no usamos rootDir: server porque Render no deja ver archivos fuera de rootDir,
+# y el servidor reutiliza la simulación de ../js. Los comandos entran a server/ con cd.
+services:
+  - type: web
+    name: multiverse-moba-server
+    runtime: node
+    plan: free
+    buildCommand: cd server && npm ci
+    startCommand: cd server && npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - server/**
+        - js/**
+        - css/**
+        - assets/**
+        - vendor/**
+        - index.html
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: MAX_ROOMS
+        value: "10"

@@ -371,3 +371,31 @@ body.team-shapes .kf-item img, body.team-shapes .tp-pic { border-style: double; 
 #fs-hint { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 9999; background: rgba(8,12,22,0.9); color: #fff; border: 1px solid #3a4a70;
   border-radius: 8px; padding: 8px 16px; font-size: 14px; pointer-events: none; opacity: 0; transition: opacity .3s; }
 #fs-hint.show { opacity: 1; }
+
+/* Jugar online (servidor) */
+#other-bar { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+.mode-btn.small { font-size: 13px; padding: 6px 12px; }
+.other-note { color: #9fb0d0; font-size: 12px; }
+.online-status { margin: 6px 0; font-weight: bold; color: #9fd4ff; }
+.online-status.online { color: #7dff9a; }
+.online-status.offline { color: #ff8a8a; }
+.online-status.waking, .online-status.reconnecting { color: #ffd54a; }
+.online-create { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+.online-create input { padding: 8px; border-radius: 6px; border: 1px solid #3a4a70; background: #0d1424; color: #fff; min-width: 240px; }
+#online-msg { color: #ff8a8a; }
+#online-rooms { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow: auto; }
+.room-row { display: grid; grid-template-columns: 2fr 2fr 1.6fr 1.6fr; gap: 10px; align-items: center; background: rgba(13,20,36,0.85); border: 1px solid #2a3a5c; border-radius: 8px; padding: 8px 12px; }
+.room-row .rc { color: #ffd54a; font-family: monospace; }
+.room-row small { color: #9fb0d0; }
+.room-row .tb { color: #6fb8ff; } .room-row .tr { color: #ff7a7a; }
+.rs.lobby { color: #7dff9a; } .rs.play { color: #ffd54a; } .rs.ended { color: #9fb0d0; }
+.room-row button, #online-bots button { background: #24304f; color: #fff; border: 1px solid #3a4a70; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.room-row button:hover:not(:disabled), #online-bots button:hover { background: #2f6fdc; }
+.room-row button:disabled { opacity: 0.5; cursor: default; }
+.room-empty { color: #9fb0d0; padding: 12px; }
+#online-bots { background: rgba(8,12,22,0.95); border: 1px solid #ffd54a; border-radius: 10px; padding: 10px; margin: 8px 0; }
+.bp-head { margin-bottom: 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bp-row { display: grid; grid-template-columns: 44px 2fr 1fr 1fr 1fr auto; gap: 8px; align-items: center; padding: 4px 6px; border-left: 4px solid #888; margin: 3px 0; background: rgba(20,30,50,0.8); border-radius: 6px; }
+.bp-row.blue { border-left-color: #38a3ff; } .bp-row.red { border-left-color: #ff4a4a; }
+.bp-row img { width: 40px; height: 40px; border-radius: 6px; background: #101a2e; }
+.bp-wait { color: #9fb0d0; padding: 6px; }

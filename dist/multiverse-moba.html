@@ -380,6 +380,34 @@ body.team-shapes .kf-item img, body.team-shapes .tp-pic { border-style: double; 
   border-radius: 8px; padding: 8px 16px; font-size: 14px; pointer-events: none; opacity: 0; transition: opacity .3s; }
 #fs-hint.show { opacity: 1; }
 
+/* Jugar online (servidor) */
+#other-bar { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+.mode-btn.small { font-size: 13px; padding: 6px 12px; }
+.other-note { color: #9fb0d0; font-size: 12px; }
+.online-status { margin: 6px 0; font-weight: bold; color: #9fd4ff; }
+.online-status.online { color: #7dff9a; }
+.online-status.offline { color: #ff8a8a; }
+.online-status.waking, .online-status.reconnecting { color: #ffd54a; }
+.online-create { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+.online-create input { padding: 8px; border-radius: 6px; border: 1px solid #3a4a70; background: #0d1424; color: #fff; min-width: 240px; }
+#online-msg { color: #ff8a8a; }
+#online-rooms { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow: auto; }
+.room-row { display: grid; grid-template-columns: 2fr 2fr 1.6fr 1.6fr; gap: 10px; align-items: center; background: rgba(13,20,36,0.85); border: 1px solid #2a3a5c; border-radius: 8px; padding: 8px 12px; }
+.room-row .rc { color: #ffd54a; font-family: monospace; }
+.room-row small { color: #9fb0d0; }
+.room-row .tb { color: #6fb8ff; } .room-row .tr { color: #ff7a7a; }
+.rs.lobby { color: #7dff9a; } .rs.play { color: #ffd54a; } .rs.ended { color: #9fb0d0; }
+.room-row button, #online-bots button { background: #24304f; color: #fff; border: 1px solid #3a4a70; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.room-row button:hover:not(:disabled), #online-bots button:hover { background: #2f6fdc; }
+.room-row button:disabled { opacity: 0.5; cursor: default; }
+.room-empty { color: #9fb0d0; padding: 12px; }
+#online-bots { background: rgba(8,12,22,0.95); border: 1px solid #ffd54a; border-radius: 10px; padding: 10px; margin: 8px 0; }
+.bp-head { margin-bottom: 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bp-row { display: grid; grid-template-columns: 44px 2fr 1fr 1fr 1fr auto; gap: 8px; align-items: center; padding: 4px 6px; border-left: 4px solid #888; margin: 3px 0; background: rgba(20,30,50,0.8); border-radius: 6px; }
+.bp-row.blue { border-left-color: #38a3ff; } .bp-row.red { border-left-color: #ff4a4a; }
+.bp-row img { width: 40px; height: 40px; border-radius: 6px; background: #101a2e; }
+.bp-wait { color: #9fb0d0; padding: 6px; }
+
 </style>
 </head>
 <body>
@@ -393,11 +421,26 @@ body.team-shapes .kf-item img, body.team-shapes .tp-pic { border-style: double; 
     </header>
     <div id="mode-bar">
       <button id="mode-solo" class="mode-btn active">Jugar solo</button>
-      <button id="mode-host" class="mode-btn">Crear sala</button>
-      <button id="mode-join" class="mode-btn">Unirse a una sala</button>
+      <button id="mode-online" class="mode-btn">Jugar online</button>
+      <button id="mode-other" class="mode-btn">Otros modos (P2P / local)</button>
       <label class="name-field">Tu nombre: <input id="player-name" maxlength="16" placeholder="Invocador"></label>
     </div>
+    <div id="other-bar" class="hidden">
+      <button id="mode-host" class="mode-btn small">Crear sala P2P</button>
+      <button id="mode-join" class="mode-btn small">Unirse a una sala P2P</button>
+      <span class="other-note">Sin servidor: el navegador de quien crea la sala hace de servidor (si cierra la pestaña, se termina la partida).</span>
+    </div>
     <div id="tab-solo" class="mode-tab"></div>
+    <div id="tab-online" class="mode-tab hidden">
+      <div id="online-status" class="online-status"></div>
+      <div id="online-offline" class="hidden"><button id="online-retry">Reintentar</button> <button id="online-p2p" class="big-btn">Jugar por P2P</button></div>
+      <div id="online-main" class="hidden">
+        <p>Las partidas corren en el servidor: siguen aunque alguien cierre la pestaña, y podés <b>entrar a una partida en curso</b> tomando el lugar de un bot. Si se te corta, tenés 60 s para volver con el mismo campeón.</p>
+        <div class="online-create"><input id="online-room-name" maxlength="28" placeholder="Nombre de la sala (opcional)"> <button id="online-create" class="big-btn">Crear sala</button> <button id="online-refresh">Actualizar lista</button> <span id="online-msg"></span></div>
+        <div id="online-bots" class="hidden"></div>
+        <div id="online-rooms"></div>
+      </div>
+    </div>
     <div id="tab-host" class="mode-tab hidden">
       <p>Creá una sala y pasales el <b>código</b> a tus amigos. Cada uno elige campeón y equipo; los lugares vacíos los ocupan bots.
       Tu navegador hace de servidor (P2P con WebRTC): dejá esta pestaña abierta mientras juegan.</p>
@@ -408,7 +451,7 @@ body.team-shapes .kf-item img, body.team-shapes .tp-pic { border-style: double; 
       <input id="join-code" maxlength="8" placeholder="CÓDIGO" autocomplete="off"> <button id="join-room-btn" class="big-btn">Unirme</button>
       <div id="join-status" class="join-status hidden"><span id="join-status-text"></span> <button id="join-retry" class="hidden">Reintentar</button></div>
     </div>
-    <div class="net-options"><label><input type="checkbox" id="local-mode"> Modo local (pestañas de este mismo navegador, sin internet)</label>
+    <div class="net-options"><label id="local-wrap" class="hidden"><input type="checkbox" id="local-mode"> Modo local (pestañas de este mismo navegador, sin internet)</label>
       <span id="net-note"></span> <span id="menu-msg"></span></div>
     <div id="role-filters"></div>
     <div id="select-layout">
@@ -4509,6 +4552,18 @@ window.MOBA = window.MOBA || {};
     U.drawShape(ctx, 'circle', size / 2, size / 2, size * 0.1, def.accent, null);
   };
 })(window.MOBA);
+
+</script>
+  <script>/* js/config.js */
+/* Configuración del juego en línea.
+ * SERVER_URL: el servidor dedicado (ver server/README.md). Se puede cambiar sin tocar esto con ?server=wss://otro.servidor
+ * Si el juego lo sirve el mismo servidor (por ejemplo http://localhost:8080), se usa esa misma dirección. */
+window.MOBA = window.MOBA || {};
+window.MOBA.CONFIG = {
+  SERVER_URL: 'wss://multiverse-moba-server.onrender.com/ws',
+  /** Primer intento de conexión: el servidor gratis "duerme" y puede tardar hasta un minuto en despertar. */
+  CONNECT_TIMEOUT_MS: 70000
+};
 
 </script>
   <script>/* js/settings.js */
@@ -17748,8 +17803,9 @@ MOBA.registerChampion({
       this.scene.background = new T.Color(0x0a1420);
       this.camera = new T.PerspectiveCamera(FOV, 1, 100, 40000);
       this.cache = M.Art.makeCache(T, this.anime ? { toon: M.Anime } : null);
-      if (this.anime) { const self = this; M.Anime.load(function (id) { if (!self.disposed) self.swapModel(id); }); }
       this.views = new Map(); this.projViews = new Map(); this.zoneViews = new Map(); this.fxViews = []; this.pools = {};
+      // (después de crear las vistas: si el modelo ya estaba cargado, la llamada es inmediata)
+      if (this.anime) { const self = this; M.Anime.load(function (id) { if (!self.disposed) self.swapModel(id); }); }
       this.lastFx = 0; this.animated = []; this.artErrors = {};
       this.ray = new T.Raycaster(); this.plane = new T.Plane(new T.Vector3(0, 1, 0), 0);
       this.tmpV = new T.Vector3();
@@ -18245,6 +18301,7 @@ MOBA.registerChampion({
 
     /** Cambia el modelo procedural por el GLB anime cuando terminó de cargar. */
     swapModel(artId) {
+      if (!this.views) return;
       for (const v of this.views.values()) {
         if (v.artId !== artId || (v.model && v.model.anime)) continue;
         const ghost = v.ghost; if (ghost) this.setGhost(v, false);
@@ -19730,6 +19787,8 @@ MOBA.registerChampion({
       if (params.get('net') === 'local') $('local-mode').checked = true;
       if (params.get('sala')) { $('join-code').value = Net.cleanCode(params.get('sala')); }
       $('mode-solo').onclick = function () { Lobby.showTab('solo'); };
+      $('mode-online').onclick = function () { Lobby.showTab('online'); };
+      $('mode-other').onclick = function () { Lobby.showTab('host'); };
       $('mode-host').onclick = function () { Lobby.showTab('host'); };
       $('mode-join').onclick = function () { Lobby.showTab('join'); };
       $('create-room-btn').onclick = function () { Lobby.createRoom(); };
@@ -19747,10 +19806,16 @@ MOBA.registerChampion({
       $('join-retry').onclick = function () { Lobby.joinRoom(Lobby.lastJoin || $('join-code').value); };
       document.addEventListener('visibilitychange', function () { Lobby.updateHostStatus(); });
       if (!Net.peerAvailable()) $('net-note').textContent = 'PeerJS no está cargado: solo funciona el modo local.';
-      this.showTab(params.get('sala') ? 'join' : 'solo');
+      if (M.Online) M.Online.init();
+      this.showTab(params.get('sala') ? 'join' : params.get('partida') ? 'online' : 'solo');
     },
     showTab: function (tab) {
-      ['solo', 'host', 'join'].forEach(function (t) { $('mode-' + t).classList.toggle('active', t === tab); $('tab-' + t).classList.toggle('hidden', t !== tab); });
+      ['solo', 'online', 'host', 'join'].forEach(function (t) { $('mode-' + t).classList.toggle('active', t === tab); $('tab-' + t).classList.toggle('hidden', t !== tab); });
+      const other = tab === 'host' || tab === 'join';
+      $('mode-other').classList.toggle('active', other);
+      $('other-bar').classList.toggle('hidden', !other);
+      $('local-wrap').classList.toggle('hidden', !other);
+      if (tab === 'online' && M.Online) M.Online.open();
       $('select-layout').classList.toggle('hidden', tab !== 'solo');
       $('role-filters').classList.toggle('hidden', tab !== 'solo');
       this.setMenuMsg('');
@@ -19839,6 +19904,7 @@ MOBA.registerChampion({
       else if (this.transport) this.transport.send(msg);
     },
     hostStart: function () {
+      if (this.mode === 'server') { if (this.transport) this.transport.send({ k: 'start' }); return; }
       if (this.role !== 'host') return;
       const st = this.state;
       const usedByTeam = [{}, {}];
@@ -19916,6 +19982,8 @@ MOBA.registerChampion({
         if ($('lobby-screen').classList.contains('hidden')) this.showLobby(); else this.renderLobby();
         return;
       }
+      // servidor: al reconectar (o al entrar a una partida en curso) llega un "start" nuevo aunque ya haya partida
+      if (msg.k === 'start' && this.session && this.mode === 'server') { this.session = null; M.App.teardownView(); }
       if (this.session) { this.session.onMessage(msg); return; }
       if (msg.k === 'full') { const t = msg.text; this.reset(); this.backToMenu(); this.showTab('join'); this.setJoinStatus(t, 'error'); }
       else if (msg.k === 'start') { this.setJoinStatus(''); this.session = M.App.startClient(this.transport, msg); }
@@ -19935,6 +20003,7 @@ MOBA.registerChampion({
     },
     /** Revancha: el anfitrión vuelve a la sala con los mismos amigos; el cliente espera que el anfitrión vuelva. */
     backToRoom: function () {
+      if (this.mode === 'server' && this.transport) { this.transport.send({ k: 'back' }); return; }   // el servidor contesta con la sala
       if (this.role === 'host' && this.transport && this.state) {
         this.session = null;
         M.App.teardownView();
@@ -19970,7 +20039,8 @@ MOBA.registerChampion({
         t = n ? n + ' amigo' + (n === 1 ? '' : 's') + ' conectado' + (n === 1 ? '' : 's') + ' · pasales el código ' + this.state.code + ' si falta alguien' : 'Esperando jugadores… pasales el código ' + this.state.code;
         if (this.hostStatus) { t = this.hostStatus + ' · ' + t; warn = /cort|Reconect/.test(this.hostStatus) && !/Reconectado/.test(this.hostStatus); }
         if (document.hidden) { t = '⚠ Tu pestaña está en segundo plano: dejala visible para que la sala no se corte. · ' + t; warn = true; }
-      } else if (this.waitingRoom) t = 'Esperando a que el anfitrión vuelva a la sala…';
+      } else if (this.mode === 'server') t = 'Sala en el servidor: la partida sigue aunque alguien cierre la pestaña. Pasales el código ' + this.state.code + ' o el link.';
+      else if (this.waitingRoom) t = 'Esperando a que el anfitrión vuelva a la sala…';
       el.textContent = t;
       el.classList.toggle('warn', warn);
     },
@@ -20021,11 +20091,12 @@ MOBA.registerChampion({
       const st = this.state;
       if (!st) return;
       $('lobby-code').textContent = st.code;
-      $('lobby-mode').textContent = st.mode === 'local' ? 'Sala local (pestañas de este navegador)' : 'Sala online (WebRTC P2P vía PeerJS)';
+      $('lobby-mode').textContent = st.mode === 'server' ? 'Sala en el servidor · ' + (st.name || '') : st.mode === 'local' ? 'Sala local (pestañas de este navegador)' : 'Sala online (WebRTC P2P vía PeerJS)';
       // El link para compartir: la dirección actual, o la versión publicada si el juego se abrió como archivo local
       const here = location.href.split('?')[0].split('#')[0];
       const base = (location.protocol === 'file:' && st.mode !== 'local') ? M.PUBLIC_URL : here;
-      const link = base + '?sala=' + st.code + (st.mode === 'local' ? '&net=local' : '');
+      const link = st.mode === 'server' ? base + '?partida=' + st.code + (new URLSearchParams(location.search).get('server') ? '&server=' + encodeURIComponent(new URLSearchParams(location.search).get('server')) : '')
+        : base + '?sala=' + st.code + (st.mode === 'local' ? '&net=local' : '');
       $('lobby-link').textContent = link;
       for (let t = 0; t < 2; t++) {
         const list = st.players.filter(function (p) { return p.team === t; });
@@ -20034,17 +20105,17 @@ MOBA.registerChampion({
           const p = list[i];
           if (p) {
             const def = M.championById[p.champ];
-            html += '<div class="slot' + (p.id === this.myId ? ' me' : '') + '"><span class="pname">' + esc(p.name) + (p.id === 'host' ? ' 👑' : '') + '</span>' +
+            html += '<div class="slot' + (p.id === this.myId ? ' me' : '') + '"><span class="pname">' + esc(p.name) + (p.id === 'host' || p.id === st.owner ? ' 👑' : '') + '</span>' +
               '<span class="pchamp">' + (def ? esc(def.name) + ' · ' + def.role : 'eligiendo…') + '</span></div>';
           } else html += '<div class="slot empty"><span class="pname">Bot</span><span class="pchamp">lugar libre</span></div>';
         }
         $(t ? 'lobby-team-red' : 'lobby-team-blue').innerHTML = html;
       }
-      const host = this.role === 'host';
+      const host = this.role === 'host' || (st.mode === 'server' && st.owner === this.myId);
       $('lobby-start').classList.toggle('hidden', !host);
       $('lobby-wait').classList.toggle('hidden', host);
       $('lobby-count').textContent = st.players.length + ' jugador' + (st.players.length === 1 ? '' : 'es') + ' · ' + (10 - st.players.length) + ' bots';
-      $('lobby-wait').textContent = this.waitingRoom ? 'Esperando a que el anfitrión vuelva a la sala…' : 'Esperando a que el anfitrión empiece…';
+      $('lobby-wait').textContent = st.mode === 'server' ? 'Esperando a que quien creó la sala (👑) empiece…' : this.waitingRoom ? 'Esperando a que el anfitrión vuelva a la sala…' : 'Esperando a que el anfitrión empiece…';
       this.updateHostStatus();
       if ($('lobby-screen').offsetParent !== null) this.renderPicker();
     },
@@ -20062,9 +20133,243 @@ MOBA.registerChampion({
       if (this.session && this.session.close) { try { this.session.close(); } catch (e) { /* nada */ } }
       if (this.transport) { try { this.transport.close(); } catch (e) { /* nada */ } }
       this.transport = null; this.state = null; this.session = null; this.role = null; this.myId = null;
-      this.hostGone = false; this.waitingRoom = false; this.hostStatus = '';
+      this.hostGone = false; this.waitingRoom = false; this.hostStatus = ''; this.mode = 'peer';
       this.clearUrlCode();
       const net = $('lobby-net'); if (net) net.textContent = '';
+    }
+  };
+})(window.MOBA);
+
+</script>
+  <script>/* js/online.js */
+/* Juego en línea con el servidor dedicado (WebSocket): lista de partidas, crear/unirse a salas,
+ * entrar a una partida en curso tomando un bot, y reconexión automática (token guardado en el navegador). */
+(function (M) {
+  'use strict';
+  const $ = function (id) { return document.getElementById(id); };
+  const esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  const TOKEN_KEY = 'mvmoba-token', ACTIVE_KEY = 'mvmoba-active';
+  const fmt = function (s) { s = Math.max(0, s | 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+
+  const Online = M.Online = {
+    ws: null, status: 'idle', id: null, rooms: [], picking: null, bots: null, lastMsgAt: 0, everOpen: false,
+    lostAt: 0, retryTimer: 0, pingTimer: 0, connectTimer: 0, slowTimer: 0, pendingJoin: null, msg: '',
+
+    /** Dirección del servidor: ?server=…, el mismo servidor que sirve la página, o la de config.js. */
+    url: function () {
+      const q = new URLSearchParams(location.search).get('server');
+      let u = q || '';
+      if (!u && M.CONFIG && M.CONFIG.SAME_ORIGIN_SERVER) u = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+      if (!u) u = (M.CONFIG && M.CONFIG.SERVER_URL) || '';
+      u = u.trim().replace(/^http/, 'ws');
+      if (u && !/^wss?:\/\//.test(u)) u = 'wss://' + u;
+      if (u && !/\/ws\/?$/.test(u)) u = u.replace(/\/+$/, '') + '/ws';
+      return u;
+    },
+    /** El transporte que usa la sala (Lobby) en modo servidor. */
+    adapter: {
+      kind: 'server',
+      send: function (m) { Online.send(m); },
+      close: function () { Online.send({ k: 'leave' }); try { localStorage.removeItem(ACTIVE_KEY); } catch (e) { /* nada */ } }
+    },
+    inRoom: function () { return !!(M.Lobby && M.Lobby.mode === 'server' && M.Lobby.transport === this.adapter); },
+
+    init: function () {
+      $('online-create').onclick = function () { Online.create(); };
+      $('online-refresh').onclick = function () { Online.send({ k: 'list' }); };
+      $('online-retry').onclick = function () { Online.connect(true); };
+      $('online-p2p').onclick = function () { M.Lobby.showTab('host'); };
+      $('online-rooms').onclick = function (e) {
+        const b = e.target.closest('button'); if (!b) return;
+        if (b.dataset.join) Online.join(b.dataset.join);
+        if (b.dataset.pick) Online.openPicker(b.dataset.pick);
+      };
+      $('online-bots').onclick = function (e) {
+        const b = e.target.closest('button'); if (!b) return;
+        if (b.dataset.take) Online.take(Online.picking, +b.dataset.take);
+        if (b.dataset.close != null) Online.closePicker();
+      };
+      setInterval(function () { if (Online.picking && Online.status === 'online') Online.send({ k: 'bots', room: Online.picking }); }, 2000);
+      const p = new URLSearchParams(location.search).get('partida');
+      if (p) this.pendingJoin = M.Net.cleanCode(p);
+      // si estabas en una partida y recargaste o cerraste la pestaña: volver solo
+      let active = null;
+      try { active = localStorage.getItem(ACTIVE_KEY) && localStorage.getItem(TOKEN_KEY); } catch (e) { /* nada */ }
+      if (active || this.pendingJoin) this.connect();
+    },
+    /** Se abrió la pestaña "Jugar online". */
+    open: function () { this.connect(); this.render(); if (this.status === 'online') this.send({ k: 'list' }); },
+
+    connect: function (force) {
+      if (this.ws && (this.ws.readyState === 0 || this.ws.readyState === 1)) return;
+      clearTimeout(this.retryTimer);
+      const url = this.url();
+      if (!url) { this.setStatus('offline'); return; }
+      this.setStatus('connecting');
+      let ws;
+      try { ws = new WebSocket(url); } catch (e) { this.setStatus('offline'); return; }
+      this.ws = ws;
+      const self = this;
+      clearTimeout(this.connectTimer); clearTimeout(this.slowTimer);
+      this.slowTimer = setTimeout(function () { if (self.status === 'connecting') self.setStatus('waking'); }, 4000);
+      this.connectTimer = setTimeout(function () { if (ws.readyState === 0) { try { ws.close(); } catch (e) { /* nada */ } } }, (M.CONFIG && M.CONFIG.CONNECT_TIMEOUT_MS) || 70000);
+      ws.onopen = function () {
+        clearTimeout(self.connectTimer); clearTimeout(self.slowTimer);
+        self.everOpen = true; self.lastMsgAt = Date.now();
+        let token = null; try { token = localStorage.getItem(TOKEN_KEY); } catch (e) { /* nada */ }
+        ws.send(JSON.stringify({ k: 'hello', name: M.Lobby.playerName(), token: token }));
+        clearInterval(self.pingTimer);
+        self.pingTimer = setInterval(function () {
+          if (ws.readyState !== 1) return;
+          if (Date.now() - self.lastMsgAt > 15000) { try { ws.close(); } catch (e) { /* nada */ } return; }   // conexión muerta
+          try { ws.send(JSON.stringify({ k: 'ping', t: Date.now() })); } catch (e) { /* nada */ }
+        }, 4000);
+      };
+      ws.onmessage = function (ev) {
+        self.lastMsgAt = Date.now();
+        let msg = null;
+        try { msg = JSON.parse(ev.data); } catch (e) { return; }
+        if (!msg) return;
+        try { self.handle(msg); } catch (e) { console.warn('[servidor] mensaje ignorado:', e); }
+      };
+      ws.onclose = function () {
+        clearInterval(self.pingTimer); clearTimeout(self.connectTimer); clearTimeout(self.slowTimer);
+        if (self.ws !== ws) return;
+        self.ws = null;
+        self.onLost();
+      };
+      ws.onerror = function () { /* lo maneja onclose */ };
+    },
+    onLost: function () {
+      const self = this;
+      if (this.inRoom()) {
+        // en una sala o partida: reintentar hasta 60 s (el servidor guarda tu campeón ese tiempo)
+        if (!this.lostAt) this.lostAt = Date.now();
+        if (Date.now() - this.lostAt > 60000) { this.lostAt = 0; M.Lobby.onHostGone('Se perdió la conexión con el servidor.'); this.setStatus('offline'); return; }
+        if (M.App && M.App.notice) M.App.notice('Se cortó la conexión con el servidor. Reconectando…');
+        this.setStatus('reconnecting');
+        this.retryTimer = setTimeout(function () { self.connect(); }, 1500);
+        return;
+      }
+      this.setStatus(this.everOpen ? 'reconnecting' : 'offline');
+      if (this.everOpen) this.retryTimer = setTimeout(function () { self.connect(); }, 3000);
+    },
+    send: function (m) {
+      if (!this.ws || this.ws.readyState !== 1) return false;
+      let s; try { s = JSON.stringify(m); } catch (e) { return false; }
+      try { this.ws.send(s); return true; } catch (e) { return false; }
+    },
+    /** La sala (Lobby) pasa a usar el servidor. */
+    ensureLobby: function () {
+      const L = M.Lobby;
+      if (!this.inRoom()) {
+        L.reset();
+        L.mode = 'server'; L.role = 'client'; L.transport = this.adapter; L.hostGone = false;
+      }
+      try { localStorage.setItem(ACTIVE_KEY, '1'); } catch (e) { /* nada */ }
+    },
+    handle: function (msg) {
+      switch (msg.k) {
+        case 'pong': return;
+        case 'debug': Online.lastDebug = msg; return;     // respuestas para los tests automáticos
+        case 'welcome': {
+          this.id = msg.id;
+          try { localStorage.setItem(TOKEN_KEY, msg.token); } catch (e) { /* nada */ }
+          this.setStatus('online');
+          if (this.lostAt && M.App && M.App.notice) M.App.notice('Reconectado con el servidor.');
+          const wasIn = this.inRoom();
+          this.lostAt = 0;
+          if (msg.rooms) { this.rooms = msg.rooms; this.render(); }
+          if (wasIn && !msg.resumed) { M.Lobby.onHostGone('El servidor se reinició: la partida terminó.'); }
+          if (!msg.resumed && !wasIn) { try { localStorage.removeItem(ACTIVE_KEY); } catch (e) { /* nada */ } }
+          if (this.pendingJoin) { const c = this.pendingJoin; this.pendingJoin = null; this.join(c); }
+          return;
+        }
+        case 'rooms': this.rooms = msg.rooms || []; this.render(); return;
+        case 'bots': if (this.picking && msg.room === this.picking) { this.bots = msg; this.renderPicker(); } return;
+        case 'error':
+          if (this.inRoom() && M.App && M.App.notice && M.Lobby.session) M.App.notice(msg.text);
+          this.msg = msg.text; this.render();
+          return;
+        case 'closed':
+          if (this.inRoom()) M.Lobby.onHostGone(msg.text || 'La sala se cerró.');
+          else { this.msg = msg.text || ''; this.render(); }
+          try { localStorage.removeItem(ACTIVE_KEY); } catch (e) { /* nada */ }
+          return;
+        case 'lobby': case 'start':
+          this.closePicker();
+          this.ensureLobby();
+          M.Lobby.onClientMessage(msg);
+          return;
+        case 's': case 'msg':
+          if (this.inRoom()) M.Lobby.onClientMessage(msg);
+          return;
+      }
+    },
+
+    // ---------- acciones ----------
+    create: function () {
+      if (this.status !== 'online') { this.connect(); return; }
+      this.send({ k: 'name', name: M.Lobby.playerName() });
+      this.send({ k: 'create', name: ($('online-room-name').value || '').trim() });
+    },
+    join: function (code) {
+      if (this.status !== 'online') { this.pendingJoin = code; this.connect(); return; }
+      this.send({ k: 'name', name: M.Lobby.playerName() });
+      this.send({ k: 'join', room: code });
+    },
+    openPicker: function (code) { this.picking = code; this.bots = null; this.renderPicker(); this.send({ k: 'bots', room: code }); },
+    closePicker: function () { this.picking = null; this.bots = null; const el = $('online-bots'); if (el) { el.classList.add('hidden'); el.innerHTML = ''; } },
+    take: function (code, champId) {
+      this.send({ k: 'name', name: M.Lobby.playerName() });
+      this.send({ k: 'take', room: code, champ: champId });
+    },
+
+    // ---------- interfaz ----------
+    setStatus: function (s) { this.status = s; this.render(); },
+    render: function () {
+      const st = $('online-status');
+      if (!st) return;
+      const texts = {
+        idle: '', connecting: 'Conectando con el servidor…',
+        waking: 'Despertando el servidor… (si estaba dormido puede tardar hasta un minuto)',
+        online: '● Conectado al servidor', reconnecting: 'Se cortó la conexión. Reconectando…',
+        offline: 'Servidores fuera de línea. Podés jugar con tus amigos por P2P (Otros modos) o reintentar.'
+      };
+      st.textContent = texts[this.status] || '';
+      st.className = 'online-status ' + this.status;
+      $('online-offline').classList.toggle('hidden', this.status !== 'offline');
+      $('online-main').classList.toggle('hidden', this.status !== 'online');
+      $('online-msg').textContent = this.msg || '';
+      if (this.status !== 'online') return;
+      const rows = this.rooms.map(function (r) {
+        const t = r.teams || [{}, {}];
+        const status = r.status === 'lobby' ? '<span class="rs lobby">En la sala</span>' : r.status === 'playing' ? '<span class="rs play">En curso · ' + fmt(r.elapsed) + ' · ' + (r.score ? r.score[0] + '–' + r.score[1] : '') + '</span>' : '<span class="rs ended">Terminada</span>';
+        const btn = r.status === 'lobby' ? '<button data-join="' + esc(r.code) + '">Unirse</button>'
+          : r.status === 'playing' ? '<button data-pick="' + esc(r.code) + '"' + (r.free ? '' : ' disabled') + '>Unirse a partida en curso' + (r.free ? ' (' + r.free + ' bots libres)' : '') + '</button>' : '';
+        return '<div class="room-row"><div class="rn"><b>' + esc(r.name) + '</b> <span class="rc">' + esc(r.code) + '</span><br><small>creada por ' + esc(r.owner) + '</small></div>' +
+          '<div class="rt"><span class="tb">Azul: ' + (t[0].humans || 0) + ' 👤 ' + (t[0].bots || 0) + ' 🤖</span> <span class="tr">Rojo: ' + (t[1].humans || 0) + ' 👤 ' + (t[1].bots || 0) + ' 🤖</span></div>' +
+          '<div class="rsw">' + status + '</div><div class="rb">' + btn + '</div></div>';
+      }).join('');
+      $('online-rooms').innerHTML = rows || '<div class="room-empty">No hay partidas ahora. ¡Creá una sala!</div>';
+    },
+    renderPicker: function () {
+      const el = $('online-bots');
+      if (!el || !this.picking) return;
+      el.classList.remove('hidden');
+      const room = this.rooms.find((r) => r.code === this.picking);
+      let html = '<div class="bp-head"><b>Unirse a "' + esc(room ? room.name : this.picking) + '"</b> — elegí un campeón manejado por un bot (de cualquier equipo). Lo manejás al instante. <button data-close="1">Cerrar</button></div>';
+      if (!this.bots) html += '<div class="bp-wait">Cargando…</div>';
+      else if (this.bots.status !== 'playing') html += '<div class="bp-wait">Esa partida ya no está en curso.</div>';
+      else if (!this.bots.list.length) html += '<div class="bp-wait">No quedan bots libres en esta partida.</div>';
+      else html += this.bots.list.map(function (b) {
+        const def = M.championById[b.df];
+        const pic = def && M.Portraits ? M.Portraits.get(def, true) : '';
+        return '<div class="bp-row ' + (b.tm ? 'red' : 'blue') + '">' + (pic ? '<img src="' + pic + '">' : '') + '<span class="bn">' + esc(b.name) + (b.dead ? ' <small>(muerto)</small>' : '') + '</span>' +
+          '<span class="bt">' + (b.tm ? 'Rojo' : 'Azul') + '</span><span class="bl">Nv ' + b.lv + '</span><span class="bk">' + b.k + '/' + b.d + '/' + b.a + '</span>' +
+          '<button data-take="' + b.i + '">Tomar</button></div>';
+      }).join('');
+      el.innerHTML = html;
     }
   };
 })(window.MOBA);

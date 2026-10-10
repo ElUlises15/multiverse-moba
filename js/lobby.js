@@ -39,6 +39,8 @@
       if (params.get('net') === 'local') $('local-mode').checked = true;
       if (params.get('sala')) { $('join-code').value = Net.cleanCode(params.get('sala')); }
       $('mode-solo').onclick = function () { Lobby.showTab('solo'); };
+      $('mode-online').onclick = function () { Lobby.showTab('online'); };
+      $('mode-other').onclick = function () { Lobby.showTab('host'); };
       $('mode-host').onclick = function () { Lobby.showTab('host'); };
       $('mode-join').onclick = function () { Lobby.showTab('join'); };
       $('create-room-btn').onclick = function () { Lobby.createRoom(); };
@@ -56,10 +58,16 @@
       $('join-retry').onclick = function () { Lobby.joinRoom(Lobby.lastJoin || $('join-code').value); };
       document.addEventListener('visibilitychange', function () { Lobby.updateHostStatus(); });
       if (!Net.peerAvailable()) $('net-note').textContent = 'PeerJS no está cargado: solo funciona el modo local.';
-      this.showTab(params.get('sala') ? 'join' : 'solo');
+      if (M.Online) M.Online.init();
+      this.showTab(params.get('sala') ? 'join' : params.get('partida') ? 'online' : 'solo');
     },
     showTab: function (tab) {
-      ['solo', 'host', 'join'].forEach(function (t) { $('mode-' + t).classList.toggle('active', t === tab); $('tab-' + t).classList.toggle('hidden', t !== tab); });
+      ['solo', 'online', 'host', 'join'].forEach(function (t) { $('mode-' + t).classList.toggle('active', t === tab); $('tab-' + t).classList.toggle('hidden', t !== tab); });
+      const other = tab === 'host' || tab === 'join';
+      $('mode-other').classList.toggle('active', other);
+      $('other-bar').classList.toggle('hidden', !other);
+      $('local-wrap').classList.toggle('hidden', !other);
+      if (tab === 'online' && M.Online) M.Online.open();
       $('select-layout').classList.toggle('hidden', tab !== 'solo');
       $('role-filters').classList.toggle('hidden', tab !== 'solo');
       this.setMenuMsg('');
@@ -148,6 +156,7 @@
       else if (this.transport) this.transport.send(msg);
     },
     hostStart: function () {
+      if (this.mode === 'server') { if (this.transport) this.transport.send({ k: 'start' }); return; }
       if (this.role !== 'host') return;
       const st = this.state;
       const usedByTeam = [{}, {}];
@@ -225,6 +234,8 @@
         if ($('lobby-screen').classList.contains('hidden')) this.showLobby(); else this.renderLobby();
         return;
       }
+      // servidor: al reconectar (o al entrar a una partida en curso) llega un "start" nuevo aunque ya haya partida
+      if (msg.k === 'start' && this.session && this.mode === 'server') { this.session = null; M.App.teardownView(); }
       if (this.session) { this.session.onMessage(msg); return; }
       if (msg.k === 'full') { const t = msg.text; this.reset(); this.backToMenu(); this.showTab('join'); this.setJoinStatus(t, 'error'); }
       else if (msg.k === 'start') { this.setJoinStatus(''); this.session = M.App.startClient(this.transport, msg); }
@@ -244,6 +255,7 @@
     },
     /** Revancha: el anfitrión vuelve a la sala con los mismos amigos; el cliente espera que el anfitrión vuelva. */
     backToRoom: function () {
+      if (this.mode === 'server' && this.transport) { this.transport.send({ k: 'back' }); return; }   // el servidor contesta con la sala
       if (this.role === 'host' && this.transport && this.state) {
         this.session = null;
         M.App.teardownView();
@@ -279,7 +291,8 @@
         t = n ? n + ' amigo' + (n === 1 ? '' : 's') + ' conectado' + (n === 1 ? '' : 's') + ' · pasales el código ' + this.state.code + ' si falta alguien' : 'Esperando jugadores… pasales el código ' + this.state.code;
         if (this.hostStatus) { t = this.hostStatus + ' · ' + t; warn = /cort|Reconect/.test(this.hostStatus) && !/Reconectado/.test(this.hostStatus); }
         if (document.hidden) { t = '⚠ Tu pestaña está en segundo plano: dejala visible para que la sala no se corte. · ' + t; warn = true; }
-      } else if (this.waitingRoom) t = 'Esperando a que el anfitrión vuelva a la sala…';
+      } else if (this.mode === 'server') t = 'Sala en el servidor: la partida sigue aunque alguien cierre la pestaña. Pasales el código ' + this.state.code + ' o el link.';
+      else if (this.waitingRoom) t = 'Esperando a que el anfitrión vuelva a la sala…';
       el.textContent = t;
       el.classList.toggle('warn', warn);
     },
@@ -330,11 +343,12 @@
       const st = this.state;
       if (!st) return;
       $('lobby-code').textContent = st.code;
-      $('lobby-mode').textContent = st.mode === 'local' ? 'Sala local (pestañas de este navegador)' : 'Sala online (WebRTC P2P vía PeerJS)';
+      $('lobby-mode').textContent = st.mode === 'server' ? 'Sala en el servidor · ' + (st.name || '') : st.mode === 'local' ? 'Sala local (pestañas de este navegador)' : 'Sala online (WebRTC P2P vía PeerJS)';
       // El link para compartir: la dirección actual, o la versión publicada si el juego se abrió como archivo local
       const here = location.href.split('?')[0].split('#')[0];
       const base = (location.protocol === 'file:' && st.mode !== 'local') ? M.PUBLIC_URL : here;
-      const link = base + '?sala=' + st.code + (st.mode === 'local' ? '&net=local' : '');
+      const link = st.mode === 'server' ? base + '?partida=' + st.code + (new URLSearchParams(location.search).get('server') ? '&server=' + encodeURIComponent(new URLSearchParams(location.search).get('server')) : '')
+        : base + '?sala=' + st.code + (st.mode === 'local' ? '&net=local' : '');
       $('lobby-link').textContent = link;
       for (let t = 0; t < 2; t++) {
         const list = st.players.filter(function (p) { return p.team === t; });
@@ -343,17 +357,17 @@
           const p = list[i];
           if (p) {
             const def = M.championById[p.champ];
-            html += '<div class="slot' + (p.id === this.myId ? ' me' : '') + '"><span class="pname">' + esc(p.name) + (p.id === 'host' ? ' 👑' : '') + '</span>' +
+            html += '<div class="slot' + (p.id === this.myId ? ' me' : '') + '"><span class="pname">' + esc(p.name) + (p.id === 'host' || p.id === st.owner ? ' 👑' : '') + '</span>' +
               '<span class="pchamp">' + (def ? esc(def.name) + ' · ' + def.role : 'eligiendo…') + '</span></div>';
           } else html += '<div class="slot empty"><span class="pname">Bot</span><span class="pchamp">lugar libre</span></div>';
         }
         $(t ? 'lobby-team-red' : 'lobby-team-blue').innerHTML = html;
       }
-      const host = this.role === 'host';
+      const host = this.role === 'host' || (st.mode === 'server' && st.owner === this.myId);
       $('lobby-start').classList.toggle('hidden', !host);
       $('lobby-wait').classList.toggle('hidden', host);
       $('lobby-count').textContent = st.players.length + ' jugador' + (st.players.length === 1 ? '' : 'es') + ' · ' + (10 - st.players.length) + ' bots';
-      $('lobby-wait').textContent = this.waitingRoom ? 'Esperando a que el anfitrión vuelva a la sala…' : 'Esperando a que el anfitrión empiece…';
+      $('lobby-wait').textContent = st.mode === 'server' ? 'Esperando a que quien creó la sala (👑) empiece…' : this.waitingRoom ? 'Esperando a que el anfitrión vuelva a la sala…' : 'Esperando a que el anfitrión empiece…';
       this.updateHostStatus();
       if ($('lobby-screen').offsetParent !== null) this.renderPicker();
     },
@@ -371,7 +385,7 @@
       if (this.session && this.session.close) { try { this.session.close(); } catch (e) { /* nada */ } }
       if (this.transport) { try { this.transport.close(); } catch (e) { /* nada */ } }
       this.transport = null; this.state = null; this.session = null; this.role = null; this.myId = null;
-      this.hostGone = false; this.waitingRoom = false; this.hostStatus = '';
+      this.hostGone = false; this.waitingRoom = false; this.hostStatus = ''; this.mode = 'peer';
       this.clearUrlCode();
       const net = $('lobby-net'); if (net) net.textContent = '';
     }

@@ -41,8 +41,9 @@
       this.scene.background = new T.Color(0x0a1420);
       this.camera = new T.PerspectiveCamera(FOV, 1, 100, 40000);
       this.cache = M.Art.makeCache(T, this.anime ? { toon: M.Anime } : null);
-      if (this.anime) { const self = this; M.Anime.load(function (id) { if (!self.disposed) self.swapModel(id); }); }
       this.views = new Map(); this.projViews = new Map(); this.zoneViews = new Map(); this.fxViews = []; this.pools = {};
+      // (después de crear las vistas: si el modelo ya estaba cargado, la llamada es inmediata)
+      if (this.anime) { const self = this; M.Anime.load(function (id) { if (!self.disposed) self.swapModel(id); }); }
       this.lastFx = 0; this.animated = []; this.artErrors = {};
       this.ray = new T.Raycaster(); this.plane = new T.Plane(new T.Vector3(0, 1, 0), 0);
       this.tmpV = new T.Vector3();
@@ -538,6 +539,7 @@
 
     /** Cambia el modelo procedural por el GLB anime cuando terminó de cargar. */
     swapModel(artId) {
+      if (!this.views) return;
       for (const v of this.views.values()) {
         if (v.artId !== artId || (v.model && v.model.anime)) continue;
         const ghost = v.ghost; if (ghost) this.setGhost(v, false);

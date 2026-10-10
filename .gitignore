@@ -1,6 +1,7 @@
 # Dependencias (Playwright se instala aparte para los tests)
 node_modules/
 package-lock.json
+!server/package-lock.json
 
 # Artefactos de tests
 test-results/
